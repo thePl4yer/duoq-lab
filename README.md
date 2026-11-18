@@ -61,14 +61,14 @@ Tracker groups activity into sessions. Session timestamps are collection times r
 - With **Share analysed statistics publicly** enabled, compact summaries are added to the shared library. Other visitors receive them when they open or reload the dashboard.
 - An already-open page does not poll for updates in the background.
 - Tracker data is a static snapshot. Reloading the dashboard does not fetch fresh ranks from Tracker; the snapshot must be updated separately or ranks imported manually.
-- New Rocket League matches and local replay files are not logged or imported automatically. Automatic Ballchasing API requests and replay downloads are not implemented; those integrations require a personal API key.
+- The [manual Rocket League logger](logger/README.md) captures new completed games while you explicitly run it. It reads only the local Game Data API at `ws://127.0.0.1:49124`, requires no account login or replay files, and adds no Windows startup task. It is not active when closed. Replay downloads and automatic Ballchasing API requests remain unimplemented.
 - Changes pushed to `main` trigger the GitHub Pages deployment workflow.
 
 ## Storage and sharing
 
 The bundled `data/seed.json` is part of the public website. New replay files are analysed locally in the browser. With **Share analysed statistics publicly** enabled, compact summaries are stored in a shared D1 library and become visible to all visitors. Original replay files are never sent to that server.
 
-The API accepts only statistics for Kate and PLAYER, validates format and size limits, and appends new match IDs. Existing records are not overwritten. The dashboard loads the shared library when the page opens. If the service is temporarily unavailable, the bundled dataset and local analysis remain usable, and failed publications can be retried.
+The API accepts only statistics for Kate and PLAYER, validates format and size limits, and appends new match IDs. Replay records are not overwritten by duplicate uploads. A full replay can upgrade an earlier live-only match; matching live captures can add target-player coverage without adding another game. The dashboard loads the shared library when the page opens. If the service is temporarily unavailable, the bundled dataset and local analysis remain usable, and failed publications can be retried.
 
 With sharing disabled, imports remain in that browser's IndexedDB. Manual ranks are also stored locally. JSON export and import support backups and transfers, including Ballchasing replay-detail JSON imports. Resetting browser data does not delete entries already published to the shared library.
 
@@ -88,7 +88,8 @@ GitHub collaborator access grants source-code access; it does not grant administ
 | `data/` | Bundled replay summaries, coverage notes and dated Tracker snapshot |
 | `backend/` | Complete shared-library backend, dependencies, migrations and deployment instructions |
 | `docs/` | Collaboration, ownership and handover guide |
-| `tests/` | Statistics and boost-tax checks |
+| `logger/` | Manually started Rocket League WebSocket logger and one-time API setup helper |
+| `tests/` | Statistics, boost-tax, logger and storage checks |
 | `scripts/` | Local development server and static build |
 | `assets/` | Dashboard artwork and its provenance |
 | `.github/workflows/pages.yml` | Validation, build and GitHub Pages deployment |

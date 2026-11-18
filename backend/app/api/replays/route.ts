@@ -1,7 +1,8 @@
 import { getDb } from '@/db';
 import { replays } from '@/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { sanitizeReplay } from '@/lib/sanitize';
+import { mergeStoredSummary } from '@/lib/merge-summary';
 export const dynamic = 'force-dynamic';
 const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(value:unknown,status=200)=>Response.json(value,{status,headers});
@@ -22,6 +23,13 @@ export async function POST(request:Request){
     text+=decoder.decode();
     const record=sanitizeReplay(JSON.parse(text));const db=getDb();
     await db.insert(replays).values({id:record.id,summary:JSON.stringify(record),createdAt:new Date().toISOString()}).onConflictDoNothing();
+    for(let attempt=0;attempt<3;attempt++){
+      const current=(await db.select().from(replays).where(eq(replays.id,record.id)).limit(1))[0];
+      const merged=JSON.stringify(mergeStoredSummary(JSON.parse(current.summary),record));
+      if(merged===current.summary)break;
+      const changed=await db.update(replays).set({summary:merged}).where(and(eq(replays.id,record.id),eq(replays.summary,current.summary))).returning({id:replays.id});
+      if(changed.length)break;
+    }
     const saved=await db.select().from(replays).where(eq(replays.id,record.id)).limit(1);
     return reply({replay:JSON.parse(saved[0].summary)},201);
   }catch(error){return reply({error:error instanceof Error?error.message:'Invalid replay summary.'},400);}

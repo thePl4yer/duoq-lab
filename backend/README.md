@@ -37,7 +37,7 @@ npm start
 | `POST /api/replays` | Accepts a validated JSON summary up to 96 KiB; appends a new match or returns its existing record |
 | `OPTIONS /api/replays` | Public CORS preflight |
 
-Only Steam IDs `76561198058377116` and `76561198060138310` are accepted. Match IDs are normalised to uppercase. Existing records are never overwritten by imports. This is a public submissions API: anyone can submit a valid summary. Submissions come from browser analysis and are not independently verified by a game server.
+Only Steam IDs `76561198058377116` and `76561198060138310` are accepted. Match IDs are normalised to uppercase. Existing replay records are never overwritten by imports. A real replay can upgrade a scoreboard-only live record. Matching live records may combine target-player coverage; compare-and-swap updates protect concurrent uploads. This is a public submissions API: anyone can submit a valid summary. Submissions come from browser analysis and are not independently verified by a game server.
 
 Original replay files are parsed in the visitor's browser. The API keeps compact results, strips local filenames/titles and source URLs, and fixes the two target display names. Credentials and local filesystem paths are not part of the stored summary.
 
@@ -47,6 +47,7 @@ Original replay files are parsed in the visitor's browser. The API keeps compact
 | --- | --- |
 | `app/api/replays/route.ts` | HTTP endpoints, body limit, pagination and append-only storage |
 | `lib/sanitize.ts` | Target-player and statistic validation |
+| `lib/merge-summary.ts` | Live-record enrichment and replay precedence |
 | `db/index.ts`, `db/schema.ts` | D1 connection and Drizzle schema |
 | `drizzle/` | SQL migrations and Drizzle metadata |
 | `worker/index.ts` | Production Worker entrypoint |

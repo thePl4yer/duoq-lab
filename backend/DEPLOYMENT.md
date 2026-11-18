@@ -64,7 +64,7 @@ After creating and migrating your new service, import the exported summaries:
 node scripts/library-transfer.mjs import --file backups/library.json --api https://YOUR-WORKER.workers.dev/api/replays
 ```
 
-The import uses the target's public POST API and can be resumed: existing match IDs are returned without being overwritten. The server revalidates each summary and sets new import timestamps. The command requires an explicit target URL so it does not write back to production by default.
+The import uses the target's public POST API and can be resumed: existing match IDs do not create another game. Replay records retain precedence; a full replay can upgrade an earlier live-only record. The server revalidates each summary and sets new import timestamps. The command requires an explicit target URL so it does not write back to production by default.
 
 To include the bundled initial dataset in a new database, the same import command accepts `../data/seed.json` as its input file. Alternatively, keep serving the seed with the frontend as before.
 

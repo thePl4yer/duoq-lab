@@ -11,5 +11,5 @@ http.createServer(async(req,res)=>{
     const file=path.resolve(root,relative);
     if(!file.startsWith(root+path.sep)&&file!==root){res.writeHead(403);res.end();return;}
     const bytes=await fs.readFile(file);res.writeHead(200,{'Content-Type':mime[path.extname(file)]??'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(bytes);
-  }catch{res.writeHead(404);res.end('Nicht gefunden');}
+  }catch{res.writeHead(404);res.end('Not found');}
 }).listen(port,'127.0.0.1',()=>console.log(`Local: http://127.0.0.1:${port}`));

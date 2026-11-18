@@ -76,7 +76,18 @@ export function mergeReplays(current,incoming){
   for(const r of incoming){
     const key=r.id.toUpperCase();
     const previous=map.get(key);
-    if(!previous||r.bumpAvailable||!previous.bumpAvailable)map.set(key,{...r,sourceUrl:r.sourceUrl??previous?.sourceUrl??null,ballchasingId:r.ballchasingId??previous?.ballchasingId});
+    if(previous?.source!=='live'&&r.source==='live'&&previous)continue;
+    if(previous?.source==='live'&&r.source==='live'){
+      if(previous.winnerTeam!==r.winnerTeam)continue;
+      const incomingFinal=r.capture?.finalSnapshot===true,previousFinal=previous.capture?.finalSnapshot===true;
+      if(incomingFinal===previousFinal&&JSON.stringify(previous.score)!==JSON.stringify(r.score))continue;
+      const primary=incomingFinal&&!previousFinal?r:previous,secondary=primary===r?previous:r;
+      const players=new Map(primary.players.map(p=>[p.id,p]));
+      for(const p of secondary.players){const old=players.get(p.id);if(!old)players.set(p.id,p);else if(old.team===p.team)players.set(p.id,{...old,...Object.fromEntries(['goals','assists','saves','shots','demos'].map(k=>[k,p[k]===null?old[k]:old[k]===null?p[k]:Math.max(old[k],p[k])]))});}
+      const complete=previous.capture?.rosterComplete===true||r.capture?.rosterComplete===true;
+      map.set(key,{...primary,players:[...players.values()],capture:{rosterComplete:complete,startedMidMatch:!complete,finalSnapshot:previousFinal||incomingFinal}});continue;
+    }
+    if(!previous||previous.source==='live'||r.bumpAvailable||!previous.bumpAvailable)map.set(key,{...r,...(previous?.source==='live'&&r.winnerTeam===undefined?{winnerTeam:previous.winnerTeam}:{}),sourceUrl:r.sourceUrl??previous?.sourceUrl??null,ballchasingId:r.ballchasingId??previous?.ballchasingId});
   }
   return [...map.values()].sort((a,b)=>String(b.date??'').localeCompare(String(a.date??'')));
 }
@@ -85,19 +96,21 @@ export function pairInfo(r){
   const both=pair.every(Boolean),together=both&&pair[0].team===pair[1].team;
   const team=pair[0]?.team;
   const scored=together&&r.score.every(Number.isFinite);
-  const result=!scored?null:r.score[team]>r.score[1-team]?'win':r.score[team]<r.score[1-team]?'loss':'draw';
+  const result=!scored?null:[0,1].includes(r.winnerTeam)?r.winnerTeam===team?'win':'loss':r.score[team]>r.score[1-team]?'win':r.score[team]<r.score[1-team]?'loss':'draw';
   return {pair,both,together,result};
 }
 export function aggregate(replays,scope='together'){
-  const shared=replays.filter(r=>{const pair=pairInfo(r);return scope==='together'?pair.together:scope==='solo'?!pair.both&&pair.pair.some(Boolean):pair.pair.some(Boolean);});
+  const shared=replays.filter(r=>{const pair=pairInfo(r);return scope==='together'?pair.together:scope==='solo'?!pair.both&&pair.pair.some(Boolean)&&(r.source!=='live'||r.capture?.rosterComplete===true):pair.pair.some(Boolean);});
   const players=PLAYERS.map(base=>{
     const matches=shared.filter(r=>r.players.some(p=>p.id===base.id));
     const rows=matches.map(r=>r.players.find(p=>p.id===base.id));
     const total=stat();for(const [index,p] of rows.entries())for(const k of Object.keys(total))if(p[k]!==null&&!(matches[index].boostWarning&&['boostStolen','boostCollected','boostUsed','bigStolen','smallStolen'].includes(k)))total[k]=(total[k]??0)+n(p[k]);
-    const boostRows=rows.filter((p,i)=>!matches[i].boostWarning),boostTracked=boostRows.reduce((a,p)=>a+n(p.tracked),0);
-    const result=r=>{const p=r.players.find(p=>p.id===base.id);return r.score[p.team]-r.score[1-p.team];};
+    for(const key of ['goals','assists','saves','shots','demos'])if(rows.length&&!rows.some(p=>Number.isFinite(p[key])))total[key]=null;
+    const boostRows=rows.filter((p,i)=>!matches[i].boostWarning&&['boostStolen','boostCollected','bigStolen','smallStolen'].every(k=>Number.isFinite(p[k]))),boostTracked=boostRows.reduce((a,p)=>a+n(p.tracked),0);
+    const movementRows=rows.filter(p=>p.tracked>0&&Number.isFinite(p.speedIntegral)),movementTime=movementRows.reduce((s,p)=>s+p.tracked,0);
+    const result=r=>{const p=r.players.find(p=>p.id===base.id);return [0,1].includes(r.winnerTeam)?r.winnerTeam===p.team?1:-1:r.score[p.team]-r.score[1-p.team];};
     const wins=matches.filter(r=>result(r)>0).length,losses=matches.filter(r=>result(r)<0).length,draws=matches.filter(r=>result(r)===0).length;
-    return {...base,...total,games:rows.length,wins,losses,draws,winRate:rows.length?100*wins/rows.length:null,boostGames:boostRows.length,avgSpeed:total.tracked?total.speedIntegral/total.tracked:null,superPct:total.tracked?100*total.supersonic/total.tracked:null,airPct:total.tracked?100*total.air/total.tracked:null,bpm:boostTracked?total.boostCollected*60/boostTracked:null};
+    return {...base,...total,games:rows.length,wins,losses,draws,winRate:rows.length?100*wins/rows.length:null,boostGames:boostRows.length,movementGames:movementRows.length,avgSpeed:movementTime?movementRows.reduce((s,p)=>s+p.speedIntegral,0)/movementTime:null,superPct:movementTime?100*total.supersonic/movementTime:null,airPct:movementTime?100*total.air/movementTime:null,bpm:boostTracked?total.boostCollected*60/boostTracked:null};
   });
   const coverage=shared.filter(r=>r.bumpAvailable&&pairInfo(r).both);
   const pairBumps=PLAYERS.map((p,i)=>coverage.flatMap(r=>r.bumps).filter(e=>e.from===p.id&&e.to===PLAYERS[1-i].id).length);
@@ -108,6 +121,10 @@ export function aggregate(replays,scope='together'){
 export function validateSummary(r){
   if(!r||r.schema!==1||typeof r.id!=='string'||r.id.length>180||!Array.isArray(r.players)||r.players.length>16||!Array.isArray(r.score)||r.score.length!==2)throw Error('Invalid dashboard backup.');
   if(!Array.isArray(r.bumps)||r.bumps.length>50000)throw Error('Invalid bump data.');
+  if(!r.score.every(x=>Number.isFinite(x)&&x>=0&&x<=1000))throw Error('Invalid match score.');
+  if(r.winnerTeam!==undefined&&![0,1].includes(r.winnerTeam))throw Error('Invalid match winner.');
+  if(r.source==='live'&&(![0,1].includes(r.winnerTeam)||r.duration!==null||r.bumpAvailable||r.bumps.length||typeof r.capture?.rosterComplete!=='boolean'))throw Error('Invalid live match coverage.');
+  if(r.source==='live'&&r.players.some(p=>['tracked','speedIntegral','supersonic','air','boostStolen','boostCollected','boostUsed','bigStolen','smallStolen'].some(k=>p[k]!==null)))throw Error('Live movement and boost details must remain unknown.');
   for(const p of r.players){if(typeof p.id!=='string'||![0,1].includes(p.team))throw Error('Invalid player identity.');for(const key of Object.keys(stat()))if(p[key]!==null&&(!Number.isFinite(p[key])||p[key]<0))throw Error('Invalid statistic.');}
   if(r.date!==null && typeof r.date!=='string')throw Error('Invalid date.');
   if(r.sourceUrl && !/^https:\/\/ballchasing\.com\/replay\/[\w-]+$/.test(r.sourceUrl))r={...r,sourceUrl:null};
@@ -121,7 +138,7 @@ export function trackerRanks(data,expectedId){
     if(s.type!=='playlist')continue;
     const mode=MODES.find(m=>m.playlist===Number(s.attributes?.playlistId));if(!mode)continue;
     const mmr=Number(s.stats?.rating?.value);if(!Number.isFinite(mmr)||mmr<0)continue;
-    result[mode.id]={mmr,tier:s.stats?.tier?.metadata?.name??'Rang unbekannt',division:s.stats?.division?.metadata?.name??'',season:d.metadata?.currentSeason??null,source:'tracker-import',updatedAt:new Date().toISOString()};
+    result[mode.id]={mmr,tier:s.stats?.tier?.metadata?.name??'Rank unknown',division:s.stats?.division?.metadata?.name??'',season:d.metadata?.currentSeason??null,source:'tracker-import',updatedAt:new Date().toISOString()};
   }
   if(!Object.keys(result).length)throw Error('This response contains no supported playlist ranks.');
   return result;
