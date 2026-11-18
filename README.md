@@ -49,6 +49,8 @@ Bei deaktivierter Freigabe bleibt ein Import in IndexedDB dieses Browsers. Manue
 
 ## GitHub Pages
 
+Live: [DuoQ Lab](https://thepl4yer.github.io/duoq-lab/). Repository: [thePl4yer/duoq-lab](https://github.com/thePl4yer/duoq-lab).
+
 Der Workflow `.github/workflows/pages.yml` installiert die gepinnte Abhängigkeit, führt die Statistiktests aus, baut `dist/` und veröffentlicht über GitHub Pages. Im Repository unter **Settings → Pages → Source: GitHub Actions** aktivieren. Relative Asset-Pfade unterstützen Projekt-URLs wie `https://<account>.github.io/duoq-lab/`.
 
 ## Quellen
