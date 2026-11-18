@@ -72,7 +72,13 @@ The API accepts only statistics for Kate and PLAYER, validates format and size l
 
 With sharing disabled, imports remain in that browser's IndexedDB. Manual ranks are also stored locally. JSON export and import support backups and transfers, including Ballchasing replay-detail JSON imports. Resetting browser data does not delete entries already published to the shared library.
 
-The API implementation and schema are included in [`backend/`](backend/README.md). The complete Vinext hosting project and migrations are supplied separately as the local `duoq-api` deliverable. The frontend connects to the API through `src/shared-library.js`.
+The complete backend project is included in [`backend/`](backend/README.md): API routes, validation, database schema and migrations, pinned dependencies, Worker entrypoint, framework configuration and build tools. The frontend connects to the API through `src/shared-library.js`.
+
+## Working with collaborators
+
+Clone this repository to develop both the frontend and backend. Start with the [collaboration guide](docs/COLLABORATION.md), then follow the [backend setup](backend/README.md) and [deployment guide](backend/DEPLOYMENT.md).
+
+GitHub collaborator access grants source-code access; it does not grant administration of the current Sites service or its database. The backend can run locally without a ChatGPT account and can be deployed to your own Cloudflare account. Publishing changes to the existing Sites service requires separate Site editor access. Pushing backend changes to GitHub runs checks but does not deploy that service automatically.
 
 ## Repository layout
 
@@ -80,7 +86,8 @@ The API implementation and schema are included in [`backend/`](backend/README.md
 | --- | --- |
 | `src/` | Dashboard UI, aggregation, replay worker, Tracker display and boost-tax heuristic |
 | `data/` | Bundled replay summaries, coverage notes and dated Tracker snapshot |
-| `backend/` | Shared-library API logic and database schema |
+| `backend/` | Complete shared-library backend, dependencies, migrations and deployment instructions |
+| `docs/` | Collaboration, ownership and handover guide |
 | `tests/` | Statistics and boost-tax checks |
 | `scripts/` | Local development server and static build |
 | `assets/` | Dashboard artwork and its provenance |
