@@ -7,4 +7,4 @@ for(const file of ['index.html','src','data','assets'])await fs.cp(path.join(roo
 await fs.mkdir(path.join(dest,'vendor'),{recursive:true});
 for(const file of ['rl_replay_subtr_actor.js','rl_replay_subtr_actor_bg.wasm','LICENSE'])await fs.copyFile(path.join(root,'node_modules/@rlrml/subtr-actor',file),path.join(dest,'vendor',file));
 await fs.writeFile(path.join(dest,'.nojekyll'),'');
-console.log('Dashboard gebaut: dist/ (inklusive lokalem WASM-Parser)');
+console.log('Dashboard built: dist/ (including the local WebAssembly parser)');

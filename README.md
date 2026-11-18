@@ -1,10 +1,14 @@
 # DuoQ Lab
 
-Rocket-League-Dashboard für **Kate** (`76561198058377116`) und **P L 4 Y E R** (`76561198060138310`). Statische Website für GitHub Pages mit echter, lokaler `.replay`-Analyse über WebAssembly. Kein Server, kein API-Schlüssel und kein Upload zu Dritten für die Dateianalyse nötig.
+A Rocket League dashboard for **Kate** (`76561198058377116`) and **P L 4 Y E R** (`76561198060138310`), with replay analytics, player comparisons and a shared public statistics library.
 
-## Start
+**[Open the dashboard](https://thepl4yer.github.io/duoq-lab/)** · [GitHub repository](https://github.com/thePl4yer/duoq-lab)
 
-Node.js 24 oder neuer:
+The frontend is a static website hosted on GitHub Pages. Replay files are analysed locally in the visitor's browser through WebAssembly. File analysis requires no server, API key or upload to a third party. An optional shared API stores compact statistics so other visitors can see them.
+
+## Getting started
+
+Requirements: Node.js 24 or newer and npm.
 
 ```sh
 npm install --ignore-scripts
@@ -13,52 +17,88 @@ npm run build
 npm run dev
 ```
 
-Dann `http://127.0.0.1:4173` öffnen. `dist/` ist die veröffentlichbare Website. Die WASM-Datei wird aus der exakt gepinnten MIT-Abhängigkeit `@rlrml/subtr-actor@1.5.1` kopiert. Die Website muss über HTTP(S) laufen; einfaches Öffnen von `index.html` als `file://` unterstützt keine Modul-Worker.
+Open `http://127.0.0.1:4173`. The `dist/` directory contains the publishable website. To serve the production build locally, run `npm run preview`.
 
-## Statistikansichten
+The build copies the WebAssembly module from the pinned MIT-licensed dependency `@rlrml/subtr-actor@1.5.1`. Serve the website over HTTP(S): opening `index.html` directly through `file://` does not support module workers.
 
-* **Zusammen:** beide Steam-IDs im selben Team; beide haben dieselbe Match-Auswahl.
-* **Solo:** genau einer der Spieler im Match; jeder hat seinen eigenen Nenner.
-* **Overall:** alle eigenen Matches; einschließlich gemeinsamer Spiele und Begegnungen gegeneinander.
+## Statistics views
 
-Datum und Spielmodus filtern die Statistikansicht. Die Bibliothek hat zusätzliche Tabellenfilter und eine Suchfunktion. Eigene Uploads können einzeln, mehrfach, per Drag-and-drop oder als Ordner ausgewählt werden. Dateien ohne eine der Ziel-IDs werden nach der Metadatenprüfung übersprungen.
+- **Together:** both Steam IDs are on the same team. Both players share the same match selection.
+- **Solo:** exactly one target player appears in the match. Each player has their own match count and winrate denominator.
+- **Overall:** all available matches for each player, including matches together and matches against each other.
 
-Angezeigt werden Spiele, Siege, Niederlagen, Winrate, Tore, Vorlagen, Schüsse, Paraden, Demolierungen, zeitgewichtete Durchschnittsgeschwindigkeit, Supersonic-/Luft-Anteil, gesammelter Boost pro Minute, geklauter Boost sowie große/kleine geklaute Pads. Bumps untereinander werden aus Fahrzeugbewegungen geschätzt und mit ihrer Datenabdeckung dargestellt. Demolierungen sind separat.
+Date and game-mode filters apply to the statistics view. The replay library also has table filters and search. Import individual files, multiple files, a folder or a drag-and-drop selection. Files containing neither target Steam ID are skipped after their metadata is checked.
 
-„Boost geklaut“ meint Boost in der gegnerischen Hälfte, keinen einem bestimmten Mitspieler gehörenden Boost. Die zusätzliche Spaßstatistik „Kate schnappt PLAYER den Boost weg“ nutzt eine konservative Pad-Heuristik: tatsächliche Aufnahme durch Kate, PLAYER mit weniger als 50 Boost, innerhalb 800 uu, mit mehr als 300 uu/s und Richtungsübereinstimmung über 0,6 auf dasselbe Pad zufahrend, Zustandsalter höchstens 0,15 s. Nur bestätigte Standard-Pad-Geometrie; Hoops bleibt unbekannt, Dropshot ist nicht anwendbar. Die Anzeige ist eine beobachtete Untergrenze, kein Beleg für Absicht.
+The dashboard displays games, wins, losses, winrate, goals, assists, shots, saves, demolitions, time-weighted average speed, time at supersonic speed, time in the air, boost collected per minute, boost stolen and stolen large/small pads. Bumps between the two players are estimated from vehicle movement, with data coverage shown alongside the result. Demolitions are counted separately.
 
-## Datenbasis vom 18.11.2026
+### Kate's boost tax
 
-362 lokale Replay-Dateien im Benutzerordner gefunden. 360 Metadaten lesbar: 355 mit mindestens einem Zielspieler, fünf ohne beide. Alle 355 Ziel-Replays wurden vollständig analysiert, ohne Analysefehler. 29 enthalten beide Spieler (28 gemeinsam, eines gegeneinander), 326 nur PLAYER. Keine Kate-Solo-Dateien vorhanden.
+The regular **boost stolen** statistic means boost collected in the opponent's half; it does not assign ownership of a pad to a particular teammate.
 
-Zusätzlich fünf öffentliche, anhand beider Steam-IDs bestätigte Ballchasing-Replays (vier Hoops, ein Standard). Insgesamt **360 eindeutige Matches**: **33 zusammen**, **326 solo**, **eines gegeneinander**. Das ist eine Replay-Auswahl, keine vollständige Account-Historie. Gespeicherte Replays können Siege überrepräsentieren. Eine beschädigte Datei hat unbekannte Zugehörigkeit; eine weitere scheitert an einem nicht unterstützten Spieltyp. Ein Diagnoseordner konnte nicht gelesen werden. Es werden keine Original-Replays, absoluten lokalen Dateipfade oder fremden Spielerprofile ausgeliefert.
+The extra **Kate's boost tax** statistic uses a conservative heuristic: Kate must actually collect the pad while PLAYER has less than 50 boost, is within 800 Unreal Units, and is driving toward the same pad at more than 300 uu/s with a directional cosine above 0.6. The most recent player-state sample must be no older than 0.15 seconds.
 
-Das öffentliche Standard-Replay meldet unzuverlässige Boostdaten. Seine Boostwerte sind aus Boost-Aggregaten ausgeschlossen, seine Bewegungs- und Ergebniswerte bleiben enthalten.
+Only verified standard-map pad geometry is supported. Hoops remains unknown, and Dropshot is not applicable. The displayed value is an observed lower bound, not evidence of intention.
 
-## Aktuelle Tracker-Daten
+## Included dataset — 18 November 2026
 
-Die Profile waren über direkte HTTP-Abrufe gesperrt, konnten anschließend im Browser ausgelesen werden. `data/tracker.json` enthält den datierten Snapshot vom 18.11.2026: aktuelle Ränge und MMR für Standard, 2v2, Hoops, Dropshot, Snow Day und Rumble, Saison-Matchzahlen und Lifetime-Siege. Die englische Website zeigt diese Werte getrennt von den Replay-Statistiken.
+The initial search found 362 local replay files in the user's home directory. Metadata was readable for 360 files: 355 contained at least one target player and five contained neither. All 355 relevant replays were fully analysed without analysis errors. Of these, 29 contain both players (28 on the same team and one on opposing teams), while 326 contain only PLAYER. No Kate-only local replays were available.
 
-Tracker gruppiert Sitzungen; Zeitstempel sind Erfassungszeiten und keine Spielzeiten. Die sichtbaren Profile liefern keine gemeinsamen Match-IDs, Mitspielerlisten oder vollständigen passenden Niederlagenzahlen. Eine exakte gemeinsame/Solo-/Overall-Winrate kann deshalb daraus nicht ermittelt werden. Insbesondere dürfen Lifetime-Siege nicht durch aktuelle Saison-Matches geteilt werden. Replay-Winrates sind klar als Stichprobe beschriftet. Es gibt keinen automatischen Tracker-Sync; neue Snapshot-Werte erfordern Browser-Recherche oder einen Import. Manuelle Rangwerte und Tracker-JSON-Importe sind weiterhin möglich.
+Five public Ballchasing replays, verified using both Steam IDs, were added: four Hoops matches and one Standard match. The combined dataset contains **360 unique matches**: **33 together**, **326 solo** and **one against each other**.
 
-## Speicherung
+This is an available replay sample, not a complete account history. Saved replays may overrepresent wins. One damaged file has unknown player membership; another could not be read because of an unsupported game type. One diagnostic directory could not be accessed. The published dataset includes no original replay files, absolute local file paths or other players' profiles.
 
-Die ausgelieferte `data/seed.json` ist Teil der öffentlichen Website. Neue Replay-Dateien werden lokal im Browser analysiert. Bei aktivierter Option **Share analysed statistics publicly** werden ihre kompakten Auswertungen in der gemeinsamen D1-Bibliothek gespeichert und sind für alle Besucher sichtbar. Originaldateien werden nicht an den Server geschickt. Die API akzeptiert nur Statistiken für Kate und PLAYER, prüft Format und Größenlimits und ergänzt neue Match-IDs; bestehende Datensätze werden nicht überschrieben. Die gemeinsame Bibliothek wird beim Seitenaufruf geladen. Ist sie kurzzeitig nicht erreichbar, bleiben das mitgelieferte Dataset und lokale Analysen verfügbar; fehlgeschlagene Veröffentlichungen können erneut versucht werden.
+The public Standard replay reports unreliable boost data. Its boost values are excluded from boost aggregates; its movement statistics and match result remain included.
 
-Bei deaktivierter Freigabe bleibt ein Import in IndexedDB dieses Browsers. Manuelle Ränge sind ebenfalls browserlokal. JSON-Export und -Import dienen als Backup/Übertragung. Das Zurücksetzen des Browsers löscht keine bereits veröffentlichten Einträge. Die API-Implementierung und Migrationen liegen im benachbarten Projekt `duoq-api`; die GitHub-Pages-Oberfläche verwendet `src/shared-library.js`. Eigene Ballchasing-Detail-JSONs können importiert werden. Automatische Ballchasing-API-Abrufe und Dateidownloads benötigen einen persönlichen Schlüssel und sind nicht implementiert.
+## Tracker Network data
+
+`data/tracker.json` contains a dated snapshot captured on 18 November 2026: ranks and MMR for Standard, 2v2, Hoops, Dropshot, Snow Day and Rumble, season match counts, and lifetime wins. Direct HTTP requests to the profiles were blocked, so the snapshot was collected through the browser. The dashboard displays account totals separately from replay statistics.
+
+Tracker groups activity into sessions. Session timestamps are collection times rather than match times. The visible profiles do not expose shared match IDs, teammate lists or complete corresponding loss counts, so they cannot establish exact Together/Solo/Overall winrates. In particular, lifetime wins must not be divided by current-season match counts. Replay winrates are labelled as a sample. Manual rank entries and Tracker JSON imports are supported.
+
+### How updates work
+
+- A visitor's replay statistics update immediately after an import finishes.
+- With **Share analysed statistics publicly** enabled, compact summaries are added to the shared library. Other visitors receive them when they open or reload the dashboard.
+- An already-open page does not poll for updates in the background.
+- Tracker data is a static snapshot. Reloading the dashboard does not fetch fresh ranks from Tracker; the snapshot must be updated separately or ranks imported manually.
+- New Rocket League matches and local replay files are not logged or imported automatically. Automatic Ballchasing API requests and replay downloads are not implemented; those integrations require a personal API key.
+- Changes pushed to `main` trigger the GitHub Pages deployment workflow.
+
+## Storage and sharing
+
+The bundled `data/seed.json` is part of the public website. New replay files are analysed locally in the browser. With **Share analysed statistics publicly** enabled, compact summaries are stored in a shared D1 library and become visible to all visitors. Original replay files are never sent to that server.
+
+The API accepts only statistics for Kate and PLAYER, validates format and size limits, and appends new match IDs. Existing records are not overwritten. The dashboard loads the shared library when the page opens. If the service is temporarily unavailable, the bundled dataset and local analysis remain usable, and failed publications can be retried.
+
+With sharing disabled, imports remain in that browser's IndexedDB. Manual ranks are also stored locally. JSON export and import support backups and transfers, including Ballchasing replay-detail JSON imports. Resetting browser data does not delete entries already published to the shared library.
+
+The API implementation and schema are included in [`backend/`](backend/README.md). The complete Vinext hosting project and migrations are supplied separately as the local `duoq-api` deliverable. The frontend connects to the API through `src/shared-library.js`.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | Dashboard UI, aggregation, replay worker, Tracker display and boost-tax heuristic |
+| `data/` | Bundled replay summaries, coverage notes and dated Tracker snapshot |
+| `backend/` | Shared-library API logic and database schema |
+| `tests/` | Statistics and boost-tax checks |
+| `scripts/` | Local development server and static build |
+| `assets/` | Dashboard artwork and its provenance |
+| `.github/workflows/pages.yml` | Validation, build and GitHub Pages deployment |
 
 ## GitHub Pages
 
-Live: [DuoQ Lab](https://thepl4yer.github.io/duoq-lab/). Repository: [thePl4yer/duoq-lab](https://github.com/thePl4yer/duoq-lab).
+Live: [DuoQ Lab](https://thepl4yer.github.io/duoq-lab/).
 
-Der Workflow `.github/workflows/pages.yml` installiert die gepinnte Abhängigkeit, führt die Statistiktests aus, baut `dist/` und veröffentlicht über GitHub Pages. Im Repository unter **Settings → Pages → Source: GitHub Actions** aktivieren. Relative Asset-Pfade unterstützen Projekt-URLs wie `https://<account>.github.io/duoq-lab/`.
+The workflow at `.github/workflows/pages.yml` installs the pinned dependency, runs the statistics tests, builds `dist/` and publishes through GitHub Pages. In the repository, select **Settings → Pages → Source: GitHub Actions**. Relative asset paths support project URLs such as `https://<account>.github.io/duoq-lab/`.
 
-## Quellen
+## Sources and credits
 
-* [subtr-actor](https://github.com/rlrml/subtr-actor), MIT, Version 1.5.1 (WASM-Parser und abgeleitete Ereignisse)
-* [Ballchasing API-Dokumentation](https://ballchasing.com/doc/api)
-* Öffentliche Replay-Quellen direkt in `data/seed.json` und in der Detailansicht
-* [Kate auf Steam](https://steamcommunity.com/profiles/76561198058377116/)
-* [PLAYER auf Steam](https://steamcommunity.com/id/JustAHonestGuy/)
+- [subtr-actor](https://github.com/rlrml/subtr-actor), MIT, version 1.5.1: WebAssembly replay parser and derived events
+- [Ballchasing API documentation](https://ballchasing.com/doc/api)
+- Public replay sources linked in `data/seed.json` and each replay's detail view
+- [Kate on Steam](https://steamcommunity.com/profiles/76561198058377116/)
+- [PLAYER on Steam](https://steamcommunity.com/id/JustAHonestGuy/)
+- [Artwork provenance](assets/ARTWORK.md)
 
-Unabhängiges Fanprojekt. Rocket League® ist eine Marke der jeweiligen Rechteinhaber.
+An independent fan project. Rocket League® is a trademark of its respective owners.
