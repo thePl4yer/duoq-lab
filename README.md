@@ -110,3 +110,9 @@ The workflow at `.github/workflows/pages.yml` installs the pinned dependency, ru
 - [Artwork provenance](assets/ARTWORK.md)
 
 An independent fan project. Rocket League® is a trademark of its respective owners.
+
+### Per-mode rank history
+
+The ranked journey panel contains Standard, 2v2, Hoops, Dropshot, Snow Day and Rumble for both players. It shows current-season match counts, current MMR and rank, plus the historical rank curves rendered on Tracker. Match counts include games without replays. They are season totals, not lifetime totals. The curves may span several seasons and retain their own date axes; they are static snapshots, with links to the interactive originals.
+
+`data/rank-charts.json` stores chart geometry and axis labels read from Tracker’s visible SVG charts, not fabricated match records. `rankCapturedAt` in `data/tracker.json` records the separate refresh of rank and season-match values. Lifetime totals retain the original `capturedAt`. Refresh both files together when collecting newer charts. No scheduled Tracker scraper or account credentials are used. Together/Solo filters apply to captured matches, not these account-wide figures.

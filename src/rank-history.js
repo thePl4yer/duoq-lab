@@ -1,0 +1,14 @@
+import {PLAYERS,MODES} from './analysis.js';
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=n=>new Intl.NumberFormat('en-GB').format(n);
+export async function showRankHistory(snapshot){
+ const panel=document.createElement('section');panel.id='rank-history';panel.className='rank-history panel';
+ panel.innerHTML=`<div class="panel-heading"><div><div class="eyebrow">TRACKER NETWORK</div><h2>The ranked journey.</h2></div><label>Game mode<select id="rank-history-mode" aria-label="Rank history game mode">${MODES.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></label></div><p class="rank-history-note">Season matches include games without saved replays. Rank history covers the dates on each chart and includes earlier seasons. These account-wide Tracker figures are independent of Together / Solo and replay filters.</p><div id="rank-history-content">Loading rank history…</div>`;
+ document.querySelector('.workspace-grid').after(panel);
+ try{
+  const response=await fetch('./data/rank-charts.json');if(!response.ok)throw Error();const charts=await response.json();
+  function render(){const mode=document.querySelector('#rank-history-mode').value;
+   document.querySelector('#rank-history-content').innerHTML=`<div class="rank-history-grid">${PLAYERS.map(p=>{const rank=snapshot.profiles[p.id].ranks[mode],chart=charts.profiles[p.id]?.[mode];return `<article><h3 style="color:${p.color}">${esc(p.name)}</h3><div class="rank-history-totals"><div><small>SEASON MATCHES</small><strong>${num(rank.matches)}</strong></div><div><small>CURRENT MMR</small><strong>${num(rank.mmr)}</strong></div></div><p>${esc(rank.tier)} · ${esc(rank.division)}</p>${chart?`<svg viewBox="${esc(chart.viewBox)}" role="img" aria-label="${esc(p.name)} ${esc(mode)} MMR history from Tracker"><title>${esc(p.name)} · ${esc(mode)} · Tracker MMR history</title>${chart.grid.map(d=>`<path d="${esc(d)}" fill="none" stroke="#323b47"/>`).join('')}<g transform="${esc(chart.transform)}"><path d="${esc(chart.d)}" fill="none" stroke="${p.color}" stroke-width="2.5"/></g>${chart.labels.join('')}</svg><a href="${esc(chart.source)}" target="_blank" rel="noreferrer">Open interactive history on Tracker</a>`:'<p>History unavailable.</p>'}</article>`;}).join('')}</div><p class="rank-history-note">Captured ${new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Berlin'}).format(new Date(charts.capturedAt))} (Europe/Berlin). Static traces from Tracker’s rendered charts; open the source for interactive values and newer data. Per-mode lifetime matches and complete wins/losses are not exposed by this snapshot.</p>`;
+  }document.querySelector('#rank-history-mode').onchange=render;render();
+ }catch{document.querySelector('#rank-history-content').textContent='Rank history could not be loaded. Open either Tracker profile to view the latest history.';}
+}

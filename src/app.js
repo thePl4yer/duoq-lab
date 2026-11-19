@@ -1,3 +1,4 @@
+import {showRankHistory} from './rank-history.js';
 import {PLAYERS,MODES,aggregate,pairInfo,fromBallchasing,mergeReplays,validateSummary,trackerRanks} from './analysis.js';
 import {trackerDefaultRanks,showTrackerSnapshot} from './tracker-ui.js';
 import {fetchSharedLibrary,publishSummary} from './shared-library.js';
@@ -169,7 +170,7 @@ $$('[data-nav]').forEach(a=>a.onclick=()=>{$$('[data-nav]').forEach(b=>b.classLi
 window.addEventListener('beforeunload',e=>{if(importing){e.preventDefault();e.returnValue='';}});
 async function boot(){
   try{const [seed,coverage,tracker]=await Promise.all([fetch('./data/seed.json').then(r=>{if(!r.ok)throw Error('The dataset could not be reached.');return r.json();}),fetch('./data/coverage.json').then(r=>r.json()).catch(()=>({})),fetch('./data/tracker.json').then(r=>r.json()).catch(()=>null)]);state.replays=seed.map(validateSummary);state.coverage=coverage;state.tracker=tracker;
-    if(tracker){state.ranks=trackerDefaultRanks(tracker);state.season=tracker.season;showTrackerSnapshot(tracker);}
+    if(tracker){state.ranks=trackerDefaultRanks(tracker);state.season=tracker.season;showTrackerSnapshot(tracker);showRankHistory(tracker);}
     try{db=await openDB();stored=(await dbRead('replays')??[]).map(validateSummary);const saved=await dbRead('ranks');if(saved?.ranks&&Object.keys(saved.ranks).length){const imported=cleanRanks(saved.ranks);for(const base of PLAYERS)state.ranks[base.id]={...state.ranks[base.id],...imported[base.id]};state.season=saved.season||state.season;}state.replays=mergeReplays(state.replays,stored);}catch(e){toast(`Browser storage is unavailable: ${e.message}`,true);}
     render();
     fetchSharedLibrary().then(rows=>{state.replays=mergeReplays(state.replays,rows);render();$('#library-status').textContent='Public library connected · uploads can be shared with everyone';}).catch(()=>{$('#library-status').textContent='Public library temporarily unavailable · the included dataset and local analysis still work';});
