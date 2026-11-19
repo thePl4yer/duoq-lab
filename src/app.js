@@ -1,3 +1,4 @@
+import {showTrackerResults} from './tracker-results.js';
 import {showRankHistory} from './rank-history.js';
 import {PLAYERS,MODES,aggregate,pairInfo,fromBallchasing,mergeReplays,validateSummary,trackerRanks} from './analysis.js';
 import {trackerDefaultRanks,showTrackerSnapshot} from './tracker-ui.js';
@@ -9,6 +10,7 @@ const minutes=s=>{if(!Number.isFinite(s))return '—';const value=Math.round(s);
 const modeName=id=>MODES.find(m=>m.id===id)?.name??({doubles:'Doubles',duels:'Duels',other:'Other / private'}[id]??id);
 const dateLabel=r=>{if(!r.date)return 'No date';const d=new Date(r.date.replace(' ','T'));return isNaN(d)?r.date.slice(0,10):new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).format(d);};
 let state={replays:[],ranks:{},season:'',coverage:{},view:'together',scope:'together',mode:'all',tableMode:'all',period:'all',search:'',page:0},currentAggregate;
+let renderTrackerResults=null;
 let stored=[],importing=false,aborted=false,activeWorker=null,db;
 const pageSize=8;
 function toast(message,error=false){const el=$('#toast');el.textContent=message;el.className=`toast show${error?' error':''}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),error?11000:6500);}
@@ -38,7 +40,7 @@ function render(){
   $('#nav-count').textContent=fmt(state.replays.length);
   const checked=state.coverage.checkedAt?new Date(state.coverage.checkedAt):null;
   $('#data-date').textContent=`${state.replays.length} matches · ${checked?'Dataset checked '+new Intl.DateTimeFormat('en-GB').format(checked):'local snapshot'}`;
-  renderRanks();renderChart(a);renderTable();renderSnatches(a);
+  renderRanks();renderChart(a);renderTable();renderSnatches(a);renderTrackerResults?.(state);
 }
 function renderRanks(){
   const symbols=['◈','⇄','◎','⬡','❄','ϟ'];
@@ -172,6 +174,7 @@ async function boot(){
   try{const [seed,coverage,tracker]=await Promise.all([fetch('./data/seed.json').then(r=>{if(!r.ok)throw Error('The dataset could not be reached.');return r.json();}),fetch('./data/coverage.json').then(r=>r.json()).catch(()=>({})),fetch('./data/tracker.json').then(r=>r.json()).catch(()=>null)]);state.replays=seed.map(validateSummary);state.coverage=coverage;state.tracker=tracker;
     if(tracker){state.ranks=trackerDefaultRanks(tracker);state.season=tracker.season;showTrackerSnapshot(tracker);showRankHistory(tracker);}
     try{db=await openDB();stored=(await dbRead('replays')??[]).map(validateSummary);const saved=await dbRead('ranks');if(saved?.ranks&&Object.keys(saved.ranks).length){const imported=cleanRanks(saved.ranks);for(const base of PLAYERS)state.ranks[base.id]={...state.ranks[base.id],...imported[base.id]};state.season=saved.season||state.season;}state.replays=mergeReplays(state.replays,stored);}catch(e){toast(`Browser storage is unavailable: ${e.message}`,true);}
+    try{const res=await fetch('./data/tracker-results.json');if(res.ok){renderTrackerResults=showTrackerResults(await res.json(),()=>render());state.view='overall';state.scope='all';updateScopeTabs();}}catch{}
     render();
     fetchSharedLibrary().then(rows=>{state.replays=mergeReplays(state.replays,rows);render();$('#library-status').textContent='Public library connected · uploads can be shared with everyone';}).catch(()=>{$('#library-status').textContent='Public library temporarily unavailable · the included dataset and local analysis still work';});
   }catch(e){toast(e.message,true);$('#data-date').textContent='The data could not be loaded.';}
