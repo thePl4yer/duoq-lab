@@ -28,6 +28,7 @@ What it then does:
 
 Good to know:
 
+- **Before setup** the job still runs and publishes the `data` branch from the existing matches. Only the match history part is off.
 - **Remove it any time:** delete the `LOGIN_KEY` secret (the stored logins become unreadable). To be thorough, also use *sign out everywhere* in your Epic account.
 - **Red ✗ on a run** means a login expired: repeat step 2 or 3.
 - Logs print counts only. The login link in the log is useless without your Epic password.

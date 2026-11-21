@@ -6,7 +6,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {webcrypto as crypto} from 'node:crypto';
-import {PLAYERS,mergeReplays,validateSummary,modeId} from '../src/analysis.js';
+import {PLAYERS,mergeReplays,validateSummary,modeId,publicRow} from '../src/analysis.js';
 import * as psynet from '../src/psynet.js';
 import {summarise} from '../src/replay.js';
 import {collect as relayRows} from '../src/store.js';
@@ -83,14 +83,16 @@ async function epic(rows,token){
 }
 async function run(){
   await fs.mkdir(dir,{recursive:true});
-  const key=await loginKey(),state=await read(files.logins,{}),tokens=await renew(state,key);
+  // Without LOGIN_KEY the store is still published (existing data + relay records); only match history is off.
+  const tokens=process.env.LOGIN_KEY?await renew(await read(files.logins,{}),await loginKey()):{};
+  if(!process.env.LOGIN_KEY)log('logins: LOGIN_KEY is not set, match history is off (README: daily job setup)');
   let rows=(await read(files.matches,null)??await read(path.join(root,'data/seed.json'),[])).map(validateSummary);
   const keys=Object.keys(await read(path.join(root,'data/keys.json'),{}));
   try{const got=await relayRows(keys,Math.floor(Date.now()/1000)-14*86400);rows=mergeReplays(rows,got);log(`relays: ${got.length} signed records from ${keys.length} approved keys`);}catch(e){log('relays: failed, '+e.message);}
   const reason=await blocked(tokens);
   if(reason)log('epic: skipped, '+reason);
   else try{rows=await epic(rows,tokens.player);}catch(e){log('epic: failed, '+e.message);process.exitCode=1;}
-  await fs.writeFile(files.matches,'[\n'+rows.map(r=>JSON.stringify(r)).join(',\n')+'\n]\n');
+  await fs.writeFile(files.matches,'[\n'+rows.map(r=>JSON.stringify(publicRow(r))).join(',\n')+'\n]\n');
   log(`store: ${rows.length} matches`);
 }
 // Device login. The game is never contacted here, so approving while playing is safe.
