@@ -2,7 +2,7 @@
 
 Rocket League dashboard for **Kate** and **P L 4 Y E R**: replay stats, boost steals, bumps, tendencies.
 
-**[Open the dashboard](https://thepl4yer.github.io/duoq-lab/)** · [Collected data (`data` branch)](https://github.com/thePl4yer/duoq-lab/tree/data) · [What changed, v0.1 → v0.2](https://github.com/thePl4yer/duoq-lab/compare/v0.1...v0.2)
+**[Open the dashboard](https://thepl4yer.github.io/duoq-lab/)** · [Collected data (`data` branch)](https://github.com/thePl4yer/duoq-lab/tree/data)
 
 ## Where matches come from
 
