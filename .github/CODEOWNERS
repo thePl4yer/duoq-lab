@@ -1,0 +1,4 @@
+# Files that can reach the login secret need the owner's review.
+/.github/workflows/ @thePl4yer
+/scripts/collect.mjs @thePl4yer
+/src/psynet.js @thePl4yer

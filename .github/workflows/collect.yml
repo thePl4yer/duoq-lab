@@ -1,0 +1,44 @@
+name: Collect matches
+on:
+  schedule:
+    - cron: '17 */4 * * *' # every 4 h keeps the login alive; matches are read in the 04:17 UTC run only (05:17 CET / 06:17 CEST)
+  workflow_dispatch:
+    inputs:
+      login:
+        description: 'Leave empty for a normal run. Pick an account to (re)connect it.'
+        type: choice
+        options: ['', player, scout]
+        default: ''
+permissions:
+  contents: write
+concurrency:
+  group: collect
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    environment: collect
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - name: Open the data branch
+        run: |
+          if git fetch -q origin data; then git worktree add -q -B data store FETCH_HEAD
+          else git worktree add -q --detach store && git -C store checkout -q --orphan data && git -C store rm -rfq . ; fi
+      - name: Collect
+        run: node scripts/collect.mjs
+        env:
+          LOGIN_KEY: ${{ secrets.LOGIN_KEY }}
+          LOGIN: ${{ inputs.login }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          DATA_DIR: store
+      - name: Save the data branch
+        if: always()
+        run: |
+          cd store && git add -A && git diff --cached --quiet && exit 0
+          git -c user.name=duoq-collector -c user.email=duoq-collector@users.noreply.github.com commit -qm "collect $(date -u +%F)"
+          git push -q origin data
