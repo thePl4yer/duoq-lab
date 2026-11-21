@@ -1,124 +1,84 @@
 # DuoQ Lab
 
-A Rocket League dashboard for **Kate** (`76561198058377116`) and **P L 4 Y E R** (`76561198060138310`), with replay analytics, player comparisons and a shared public statistics library.
+Rocket League dashboard for **Kate** and **P L 4 Y E R**: replay stats, boost steals, bumps, tendencies.
 
-**[Open the dashboard](https://thepl4yer.github.io/duoq-lab/)** · [GitHub repository](https://github.com/thePl4yer/duoq-lab)
+**[Open the dashboard](https://thepl4yer.github.io/duoq-lab/)** · [Collected data (`data` branch)](https://github.com/thePl4yer/duoq-lab/tree/data) · [What changed, v0.1 → v0.2](https://github.com/thePl4yer/duoq-lab/compare/v0.1...v0.2)
 
-The frontend is a static website hosted on GitHub Pages. Replay files are analysed locally in the visitor's browser through WebAssembly. File analysis requires no server, API key or upload to a third party. An optional shared API stores compact statistics so other visitors can see them.
+## Where matches come from
 
-## Getting started
+| Source | Gives | You do |
+| --- | --- | --- |
+| Replay files | everything | drop files, or **Sync replay folder** (Chrome remembers the folder) |
+| Daily job | last 20 matches of PLAYER's account, analysed from Rocket League's own replays | one-time setup below |
+| Live tab | result, goals, own-team speed and boost | keep the dashboard open while playing |
 
-Requirements: Node.js 24 or newer and npm.
+Everything shared is stored in `matches.json` on the [`data` branch](https://github.com/thePl4yer/duoq-lab/tree/data); the site reads it from there. Shared rows contain only the two players and the **day**, never the time.
 
-```sh
-npm install --ignore-scripts
-npm test
-npm run build
-npm run dev
+## Daily job setup (once, about 5 minutes)
+
+1. **Settings → Environments → New environment** named `collect`. Add a secret `LOGIN_KEY`: any 30+ random characters. Nobody needs to remember it.
+2. **Actions → Collect matches → Run workflow**, choose `login: scout`. Open the link from the run log and confirm with a spare Epic account (a free throwaway).
+3. Run it again with `login: player` and confirm with your own Epic account (the one linked to your Rocket League).
+
+What it then does:
+
+- Every 4 hours it renews both logins. This talks to Epic's login service only, never to the game.
+- Around 06:00 Berlin time it asks Steam and (through the scout account) Rocket League whether PLAYER is online. If either says yes, or cannot answer, it does nothing until the next night. Otherwise it reads the last 20 matches, analyses the replays and commits the results.
+- Rocket League keeps only the last 20 matches. On a longer day the earlier ones are covered by the live tab or saved replays.
+
+Good to know:
+
+- **Remove it any time:** delete the `LOGIN_KEY` secret (the stored logins become unreadable). To be thorough, also use *sign out everywhere* in your Epic account.
+- **Red ✗ on a run** means a login expired: repeat step 2 or 3.
+- Logs print counts only. The login link in the log is useless without your Epic password.
+- The logins are stored encrypted on the `data` branch. The match history comes from an unofficial interface of the game; a game update can break it until [rlapi](https://github.com/dank/rlapi) catches up.
+- Recommended: **Settings → Rules** on `main`, require a pull request with code-owner review. `.github/CODEOWNERS` already lists the files that can reach the secret.
+
+## Live tab
+
+Close Rocket League, set this in `TAGame\Config\TAStatsAPI.ini`, restart the game:
+
+```ini
+[TAGame.MatchStatsExporter_TA]
+PacketSendRate=10
+WebPort=49124
 ```
 
-Open `http://127.0.0.1:4173`. The `dist/` directory contains the publishable website. To serve the production build locally, run `npm run preview`.
+Then **Data & settings → Connect to Rocket League** and allow local network access once. It only sees the match being played, so open it before you queue. [Connection test page](https://thepl4yer.github.io/duoq-lab/probe.html).
 
-The build copies the WebAssembly module from the pinned MIT-licensed dependency `@rlrml/subtr-actor@1.5.1`. Serve the website over HTTP(S): opening `index.html` directly through `file://` does not support module workers.
+Sharing from a browser needs its key approved: copy **Your key** from Data & settings into `data/keys.json` as `{"<key>": "<name>"}`.
 
-## Statistics views
+## What the numbers mean
 
-- **Together:** both Steam IDs are on the same team. Both players share the same match selection.
-- **Solo:** exactly one target player appears in the match. Each player has their own match count and winrate denominator.
-- **Overall:** all available matches for each player, including matches together and matches against each other.
+- **Boost stolen:** boost you denied an opponent. You take a pad and an opponent then drives over the empty pad before it respawns, or was under a second from reaching it. Amount = what that car would have gained. Standard maps, replays only.
+- **Boost tax:** the same test against your teammate, counted only when the taker had more boost.
+- **Tendencies:** whiffs, 50/50s, kickoffs, passes, first-man time, record after the first goal. Below ~30 games these are anecdotes.
+- **Dropshot damage:** read from the replay's network data.
+- **Bumps:** estimated by the replay parser. Demos are separate.
 
-Date and game-mode filters apply to the statistics view. The replay library also has table filters and search. Import individual files, multiple files, a folder or a drag-and-drop selection. Files containing neither target Steam ID are skipped after their metadata is checked.
+## v0.2 in short
 
-The dashboard displays games, wins, losses, winrate, goals, assists, shots, saves, demolitions, time-weighted average speed, time at supersonic speed, time in the air, boost collected per minute, boost stolen and stolen large/small pads. Bumps between the two players are estimated from vehicle movement, with data coverage shown alongside the result. Demolitions are counted separately.
+- Matches arrive on their own: nightly job, live tab, one-click folder sync.
+- Data lives in this repository (`data` branch) instead of an external hosted database.
+- Boost stolen now measures boost actually denied; added boost tax amounts, tendencies, Dropshot damage, ranks from match history.
+- Removed the hosted backend and the Node logger (both still in tag `v0.1`).
 
-### Kate's boost tax
+## Develop
 
-The regular **boost stolen** statistic means boost collected in the opponent's half; it does not assign ownership of a pad to a particular teammate.
-
-The extra **Kate's boost tax** statistic uses a conservative heuristic: Kate must actually collect the pad while PLAYER has less than 50 boost, is within 800 Unreal Units, and is driving toward the same pad at more than 300 uu/s with a directional cosine above 0.6. The most recent player-state sample must be no older than 0.15 seconds.
-
-Only verified standard-map pad geometry is supported. Hoops remains unknown, and Dropshot is not applicable. The displayed value is an observed lower bound, not evidence of intention.
-
-## Included dataset — 18 November 2026
-
-The initial search found 362 local replay files in the user's home directory. Metadata was readable for 360 files: 355 contained at least one target player and five contained neither. All 355 relevant replays were fully analysed without analysis errors. Of these, 29 contain both players (28 on the same team and one on opposing teams), while 326 contain only PLAYER. No Kate-only local replays were available.
-
-Five public Ballchasing replays, verified using both Steam IDs, were added: four Hoops matches and one Standard match. The combined dataset contains **360 unique matches**: **33 together**, **326 solo** and **one against each other**.
-
-This is an available replay sample, not a complete account history. Saved replays may overrepresent wins. One damaged file has unknown player membership; another could not be read because of an unsupported game type. One diagnostic directory could not be accessed. The published dataset includes no original replay files, absolute local file paths or other players' profiles.
-
-The public Standard replay reports unreliable boost data. Its boost values are excluded from boost aggregates; its movement statistics and match result remain included.
-
-## Tracker Network data
-
-`data/tracker.json` contains a dated snapshot captured on 18 November 2026: ranks and MMR for Standard, 2v2, Hoops, Dropshot, Snow Day and Rumble, season match counts, and lifetime wins. Direct HTTP requests to the profiles were blocked, so the snapshot was collected through the browser. The dashboard displays account totals separately from replay statistics.
-
-Tracker groups activity into sessions. Session timestamps are collection times rather than match times. The visible profiles do not expose shared match IDs, teammate lists or complete corresponding loss counts, so they cannot establish exact Together/Solo/Overall winrates. In particular, lifetime wins must not be divided by current-season match counts. Replay winrates are labelled as a sample. Manual rank entries and Tracker JSON imports are supported.
-
-### How updates work
-
-- A visitor's replay statistics update immediately after an import finishes.
-- With **Share analysed statistics publicly** enabled, compact summaries are added to the shared library. Other visitors receive them when they open or reload the dashboard.
-- An already-open page does not poll for updates in the background.
-- Tracker data is a static snapshot. Reloading the dashboard does not fetch fresh ranks from Tracker; the snapshot must be updated separately or ranks imported manually.
-- The [manual Rocket League logger](logger/README.md) captures new completed games while you explicitly run it. It reads only the local Game Data API at `ws://127.0.0.1:49124`, requires no account login or replay files, and adds no Windows startup task. It is not active when closed. Replay downloads and automatic Ballchasing API requests remain unimplemented.
-- Changes pushed to `main` trigger the GitHub Pages deployment workflow.
-
-## Storage and sharing
-
-The bundled `data/seed.json` is part of the public website. New replay files are analysed locally in the browser. With **Share analysed statistics publicly** enabled, compact summaries are stored in a shared D1 library and become visible to all visitors. Original replay files are never sent to that server.
-
-The API accepts only statistics for Kate and PLAYER, validates format and size limits, and appends new match IDs. Replay records are not overwritten by duplicate uploads. A full replay can upgrade an earlier live-only match; matching live captures can add target-player coverage without adding another game. The dashboard loads the shared library when the page opens. If the service is temporarily unavailable, the bundled dataset and local analysis remain usable, and failed publications can be retried.
-
-With sharing disabled, imports remain in that browser's IndexedDB. Manual ranks are also stored locally. JSON export and import support backups and transfers, including Ballchasing replay-detail JSON imports. Resetting browser data does not delete entries already published to the shared library.
-
-The complete backend project is included in [`backend/`](backend/README.md): API routes, validation, database schema and migrations, pinned dependencies, Worker entrypoint, framework configuration and build tools. The frontend connects to the API through `src/shared-library.js`.
-
-## Working with collaborators
-
-Clone this repository to develop both the frontend and backend. Start with the [collaboration guide](docs/COLLABORATION.md), then follow the [backend setup](backend/README.md) and [deployment guide](backend/DEPLOYMENT.md).
-
-GitHub collaborator access grants source-code access; it does not grant administration of the current Sites service or its database. The backend can run locally without a ChatGPT account and can be deployed to your own Cloudflare account. Publishing changes to the existing Sites service requires separate Site editor access. Pushing backend changes to GitHub runs checks but does not deploy that service automatically.
-
-## Repository layout
+```sh
+npm ci --ignore-scripts
+npm test
+npm run dev   # http://127.0.0.1:4173
+```
 
 | Path | Purpose |
 | --- | --- |
-| `src/` | Dashboard UI, aggregation, replay worker, Tracker display and boost-tax heuristic |
-| `data/` | Bundled replay summaries, coverage notes and dated Tracker snapshot |
-| `backend/` | Complete shared-library backend, dependencies, migrations and deployment instructions |
-| `docs/` | Collaboration, ownership and handover guide |
-| `logger/` | Manually started Rocket League WebSocket logger and one-time API setup helper |
-| `tests/` | Statistics, boost-tax, logger and storage checks |
-| `scripts/` | Local development server and static build |
-| `assets/` | Dashboard artwork and its provenance |
-| `.github/workflows/pages.yml` | Validation, build and GitHub Pages deployment |
+| `src/app.js` | dashboard UI |
+| `src/analysis.js` | summaries, merging, aggregation |
+| `src/replay.js`, `src/boost.js` | replay → summary, steal analysis |
+| `src/live.js` | local Stats API capture |
+| `src/psynet.js` | Epic login and match history |
+| `src/store.js` | shared dataset, signed relay records |
+| `scripts/collect.mjs` | the scheduled job |
 
-## GitHub Pages
-
-Live: [DuoQ Lab](https://thepl4yer.github.io/duoq-lab/).
-
-The workflow at `.github/workflows/pages.yml` installs the pinned dependency, runs the statistics tests, builds `dist/` and publishes through GitHub Pages. In the repository, select **Settings → Pages → Source: GitHub Actions**. Relative asset paths support project URLs such as `https://<account>.github.io/duoq-lab/`.
-
-## Sources and credits
-
-- [subtr-actor](https://github.com/rlrml/subtr-actor), MIT, version 1.5.1: WebAssembly replay parser and derived events
-- [Ballchasing API documentation](https://ballchasing.com/doc/api)
-- Public replay sources linked in `data/seed.json` and each replay's detail view
-- [Kate on Steam](https://steamcommunity.com/profiles/76561198058377116/)
-- [PLAYER on Steam](https://steamcommunity.com/id/JustAHonestGuy/)
-- [Artwork provenance](assets/ARTWORK.md)
-
-An independent fan project. Rocket League® is a trademark of its respective owners.
-
-### Per-mode rank history
-
-The ranked journey panel contains Standard, 2v2, Hoops, Dropshot, Snow Day and Rumble for both players. It shows current-season match counts, current MMR and rank, plus the historical rank curves rendered on Tracker. Match counts include games without replays. They are season totals, not lifetime totals. The curves may span several seasons and retain their own date axes; they are static snapshots, with links to the interactive originals.
-
-`data/rank-charts.json` stores chart geometry and axis labels read from Tracker’s visible SVG charts, not fabricated match records. `rankCapturedAt` in `data/tracker.json` records the separate refresh of rank and season-match values. Lifetime totals retain the original `capturedAt`. Refresh both files together when collecting newer charts. No scheduled Tracker scraper or account credentials are used. Together/Solo filters apply to captured matches, not these account-wide figures.
-
-### Tracker results beyond uploaded replays
-
-The results source selector defaults to Tracker estimates in Overall. `data/tracker-results.json` records the seven daily activity-calendar match totals and the visible recent session rows for both profiles. Overall winrate is shown as an indicative range: recorded wins / daily matches through (daily matches − recorded defeats) / daily matches. Unresolved outcomes are not silently treated as losses. Relative collection times make alignment of sessions to calendar days approximate; the range is not a confidence interval or a guaranteed bound.
-
-Per-mode views show the winrate of individually attributed Tracker W/L outcomes, with the sample size and grouped matches explicitly shown. The calendar exposes an all-mode denominator only, so no full per-mode winrate is invented. Mixed-mode wins remain separate, as requested, and enter the all-mode total once. Tracker cannot identify teammates, so Together/Solo results require switching to Captured matches. Speed, boost and bump metrics always retain their captured sample. This snapshot is not an automatic Tracker scraper.
+Replay parser: [subtr-actor](https://github.com/rlrml/subtr-actor) 1.5.1 (MIT). Fan project; Rocket League® belongs to its owners.

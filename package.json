@@ -1,17 +1,16 @@
 {
   "name": "duoq-lab",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/serve.mjs",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "preview": "node scripts/serve.mjs --dist",
-    "logger": "node logger/main.mjs",
-    "logger:dry-run": "node logger/main.mjs --dry-run"
+    "collect": "node scripts/collect.mjs"
   },
   "dependencies": {
-    "@rlrml/subtr-actor": "1.5.1"
+    "@rlrml/subtr-actor": "1.5.1",
+    "nostr-tools": "^2.26.1"
   }
 }

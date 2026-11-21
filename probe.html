@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DuoQ Lab · Rocket League connection test</title>
+<style>body{font:14px/1.5 system-ui,sans-serif;background:#101115;color:#d8dde6;max-width:860px;margin:32px auto;padding:0 16px}code,pre{background:#1a1d24;border-radius:6px;padding:2px 6px}pre{padding:12px;overflow:auto;max-height:340px}button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid #3a4150;background:#232833;color:inherit;cursor:pointer}table{border-collapse:collapse}td,th{border:1px solid #2c3340;padding:4px 10px;text-align:left}.ok{color:#7fd69a}.no{color:#e58a8a}</style>
+<h1>Rocket League connection test</h1>
+<p>Checks whether this browser can read Rocket League’s local Stats API at <code>ws://127.0.0.1:49124</code>. Read-only; nothing is sent to the game or anywhere else. Works from a downloaded file too.</p>
+<ol><li>Close Rocket League. In <code>TAGame\Config\TAStatsAPI.ini</code> (or <code>DefaultStatsAPI.ini</code>) set, under <code>[TAGame.MatchStatsExporter_TA]</code>: <code>PacketSendRate=10</code>, <code>WebPort=49124</code>.</li><li>Start Rocket League, then press Connect. On the hosted site Chrome asks once for local network access: choose Allow.</li><li>Play or watch a match and look at the table.</li></ol>
+<p><button id="go">Connect</button> <button id="copy">Copy report</button> <b id="state">Not connected.</b></p>
+<h3>Events seen</h3><table id="events"><tr><td>none yet</td></tr></table>
+<h3>Player fields in the last update</h3><p>Names and ids are replaced by team and slot. “own team” fields (Speed, Boost …) should be filled for your side only.</p><table id="fields"></table>
+<h3>Last update, raw</h3><pre id="raw">–</pre>
+<script>
+const $=id=>document.getElementById(id),counts={},report={events:counts,guid:false,players:[],playlist:null};let socket;
+const anonymous=p=>Object.fromEntries(Object.entries(p).map(([k,v])=>[k,k==='Name'?'(hidden)':k==='PrimaryId'?String(v).replace(/\|[^|]+\|/,'|(hidden)|'):v]));
+function show(message){
+  counts[message.Event]=(counts[message.Event]||0)+1;
+  $('events').innerHTML=Object.entries(counts).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  if(message.Event!=='UpdateState')return;
+  const d=message.Data,players=(d.Players||[]).map(anonymous),keys=[...new Set(players.flatMap(Object.keys))].filter(k=>!['Name','PrimaryId','Shortcut','Attacker'].includes(k));
+  report.guid=!!d.MatchGuid;report.playlist=d.Game?.PlaylistId??null;report.players=players.map(p=>({team:p.TeamNum,platform:String(p.PrimaryId).split('|')[0],present:keys.filter(k=>p[k]!==undefined)}));
+  $('fields').innerHTML='<tr><th>team</th>'+keys.map(k=>`<th>${k}</th>`).join('')+'</tr>'+players.map(p=>`<tr><td>${p.TeamNum}</td>`+keys.map(k=>p[k]===undefined?'<td class="no">–</td>':`<td class="ok">${p[k]}</td>`).join('')+'</tr>').join('');
+  $('raw').textContent=JSON.stringify({...d,Players:players},null,1);
+}
+$('go').onclick=()=>{
+  socket?.close();$('state').textContent='Connecting …';socket=new WebSocket('ws://127.0.0.1:49124');
+  socket.onopen=()=>$('state').textContent='Connected. Waiting for match data.';
+  socket.onmessage=e=>{try{show(JSON.parse(e.data));$('state').textContent='Connected. Receiving data.';}catch{}};
+  socket.onclose=()=>$('state').textContent='No connection. Is the game running with the Stats API enabled, and did you allow local network access?';
+};
+$('copy').onclick=()=>navigator.clipboard.writeText(JSON.stringify({page:location.protocol,...report},null,1)).then(()=>$('state').textContent='Report copied.');
+</script>
