@@ -11,6 +11,12 @@ export function remoteId(value) {
   return Object.entries(value).map(([k,v])=>`${k}:${String(v)}`).join('|');
 }
 const n = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+// Optional per-player numbers from the v0.2 replay analysis (absent in older rows).
+export const EXTRA=['taxed','taxCount','touches','whiffs','passes','fifties','fiftyWon','kickoffs','beaten','firstMan','dropshot'];
+const TIERS=['Unranked',...['Bronze','Silver','Gold','Platinum','Diamond','Champion','Grand Champion'].flatMap(n=>['I','II','III'].map(d=>n+' '+d)),'Supersonic Legend'];
+export const tierName=tier=>TIERS[tier]??'Rank unknown';
+// What leaves this browser or the collector: day precision only, no file names, hashes or import times.
+export function publicRow(r){const {hash,importedAt,...rest}=r,day=typeof r.date==='string'&&/^\d{4}-\d\d-\d\d/.test(r.date)?r.date.slice(0,10):null;return {...rest,title:'Match',date:day,dateTimezone:'day'};}
 const stat = () => ({tracked:0,speedIntegral:0,supersonic:0,air:0,boostStolen:0,boostCollected:0,boostUsed:null,goals:0,assists:0,saves:0,shots:0,demos:0,bigStolen:0,smallStolen:0});
 export function modeId(value) {
   const s=String(value??'').toLowerCase();
@@ -87,7 +93,8 @@ export function mergeReplays(current,incoming){
       const complete=previous.capture?.rosterComplete===true||r.capture?.rosterComplete===true;
       map.set(key,{...primary,players:[...players.values()],capture:{rosterComplete:complete,startedMidMatch:!complete,finalSnapshot:previousFinal||incomingFinal}});continue;
     }
-    if(!previous||previous.source==='live'||r.bumpAvailable||!previous.bumpAvailable)map.set(key,{...r,...(previous?.source==='live'&&r.winnerTeam===undefined?{winnerTeam:previous.winnerTeam}:{}),sourceUrl:r.sourceUrl??previous?.sourceUrl??null,ballchasingId:r.ballchasingId??previous?.ballchasingId});
+    if(previous?.rule===2&&r.rule!==2&&previous.bumpAvailable)continue;
+    if(!previous||previous.source==='live'||r.bumpAvailable||!previous.bumpAvailable)map.set(key,{...r,...(r.winnerTeam===undefined&&previous?.winnerTeam!==undefined?{winnerTeam:previous.winnerTeam}:{}),players:r.players.map(p=>{const old=previous?.players.find(x=>x.id===p.id);return old?.rank&&!p.rank?{...p,rank:old.rank}:p;}),sourceUrl:r.sourceUrl??previous?.sourceUrl??null,ballchasingId:r.ballchasingId??previous?.ballchasingId});
   }
   return [...map.values()].sort((a,b)=>String(b.date??'').localeCompare(String(a.date??'')));
 }
@@ -104,19 +111,24 @@ export function aggregate(replays,scope='together'){
   const players=PLAYERS.map(base=>{
     const matches=shared.filter(r=>r.players.some(p=>p.id===base.id));
     const rows=matches.map(r=>r.players.find(p=>p.id===base.id));
-    const total=stat();for(const [index,p] of rows.entries())for(const k of Object.keys(total))if(p[k]!==null&&!(matches[index].boostWarning&&['boostStolen','boostCollected','boostUsed','bigStolen','smallStolen'].includes(k)))total[k]=(total[k]??0)+n(p[k]);
+    const total=stat();for(const [index,p] of rows.entries())for(const k of Object.keys(total))if(p[k]!==null&&!['boostStolen','bigStolen','smallStolen'].includes(k)&&!(matches[index].boostWarning&&['boostCollected','boostUsed'].includes(k)))total[k]=(total[k]??0)+n(p[k]);
     for(const key of ['goals','assists','saves','shots','demos'])if(rows.length&&!rows.some(p=>Number.isFinite(p[key])))total[key]=null;
-    const boostRows=rows.filter((p,i)=>!matches[i].boostWarning&&['boostStolen','boostCollected','bigStolen','smallStolen'].every(k=>Number.isFinite(p[k]))),boostTracked=boostRows.reduce((a,p)=>a+n(p.tracked),0);
+    const boostRows=rows.filter((p,i)=>!matches[i].boostWarning&&Number.isFinite(p.boostCollected)&&p.tracked>0),boostTracked=boostRows.reduce((a,p)=>a+n(p.tracked),0);
+    const sum=(list,k)=>list.reduce((a,p)=>a+n(p[k]),0),stealRows=rows.filter((p,i)=>matches[i].rule===2&&Number.isFinite(p.boostStolen)),oldRows=rows.filter((p,i)=>matches[i].rule!==2&&!matches[i].boostWarning&&Number.isFinite(p.boostStolen));
     const movementRows=rows.filter(p=>p.tracked>0&&Number.isFinite(p.speedIntegral)),movementTime=movementRows.reduce((s,p)=>s+p.tracked,0);
     const result=r=>{const p=r.players.find(p=>p.id===base.id);return [0,1].includes(r.winnerTeam)?r.winnerTeam===p.team?1:-1:r.score[p.team]-r.score[1-p.team];};
     const wins=matches.filter(r=>result(r)>0).length,losses=matches.filter(r=>result(r)<0).length,draws=matches.filter(r=>result(r)===0).length;
-    return {...base,...total,games:rows.length,wins,losses,draws,winRate:rows.length?100*wins/rows.length:null,boostGames:boostRows.length,movementGames:movementRows.length,avgSpeed:movementTime?movementRows.reduce((s,p)=>s+p.speedIntegral,0)/movementTime:null,superPct:movementTime?100*total.supersonic/movementTime:null,airPct:movementTime?100*total.air/movementTime:null,bpm:boostTracked?total.boostCollected*60/boostTracked:null};
+    return {...base,...total,boostStolen:sum(stealRows,'boostStolen'),bigStolen:sum(stealRows,'bigStolen'),smallStolen:sum(stealRows,'smallStolen'),taxed:sum(stealRows,'taxed'),taxCount:sum(stealRows,'taxCount'),stealGames:stealRows.length,oldStolen:sum(oldRows,'boostStolen'),oldGames:oldRows.length,games:rows.length,wins,losses,draws,winRate:rows.length?100*wins/rows.length:null,boostGames:boostRows.length,movementGames:movementRows.length,avgSpeed:movementTime?movementRows.reduce((s,p)=>s+p.speedIntegral,0)/movementTime:null,superPct:movementTime?100*total.supersonic/movementTime:null,airPct:movementTime?100*total.air/movementTime:null,bpm:boostTracked?total.boostCollected*60/boostTracked:null};
   });
   const coverage=shared.filter(r=>r.bumpAvailable&&pairInfo(r).both);
   const pairBumps=PLAYERS.map((p,i)=>coverage.flatMap(r=>r.bumps).filter(e=>e.from===p.id&&e.to===PLAYERS[1-i].id).length);
   const wins=shared.filter(r=>pairInfo(r).result==='win').length;
   const results=shared.filter(r=>pairInfo(r).result!==null).length;
-  return {shared,players,wins,winRate:results?100*wins/results:null,coverage:coverage.length,pairBumps:coverage.length?pairBumps:[null,null],duration:shared.reduce((a,r)=>a+r.duration,0)};
+  const habits=PLAYERS.map(base=>{const list=shared.filter(r=>r.rule===2).map(r=>r.players.find(p=>p.id===base.id)).filter(p=>p&&Number.isFinite(p.touches)),t=k=>list.reduce((a,p)=>a+n(p[k]),0),per=k=>list.length?t(k)/list.length:null;
+    const drops=shared.filter(r=>r.mode==='dropshot').map(r=>r.players.find(p=>p.id===base.id)).filter(p=>p&&Number.isFinite(p.dropshot));
+    return {games:list.length,touches:per('touches'),whiffs:per('whiffs'),passes:per('passes'),beaten:per('beaten'),kickoffs:per('kickoffs'),fiftyPct:t('fifties')?100*t('fiftyWon')/t('fifties'):null,fifties:t('fifties'),firstManPct:t('tracked')?100*t('firstMan')/t('tracked'):null,dropshotGames:drops.length,dropshot:drops.length?drops.reduce((a,p)=>a+p.dropshot,0)/drops.length:null};});
+  const record=first=>{const list=shared.filter(r=>[0,1].includes(r.firstGoal)&&pairInfo(r).result&&(r.firstGoal===pairInfo(r).pair[0].team)===first);return {games:list.length,wins:list.filter(r=>pairInfo(r).result==='win').length};};
+  return {shared,players,habits,scoredFirst:record(true),concededFirst:record(false),wins,winRate:results?100*wins/results:null,coverage:coverage.length,pairBumps:coverage.length?pairBumps:[null,null],duration:shared.reduce((a,r)=>a+n(r.duration),0)};
 }
 export function validateSummary(r){
   if(!r||r.schema!==1||typeof r.id!=='string'||r.id.length>180||!Array.isArray(r.players)||r.players.length>16||!Array.isArray(r.score)||r.score.length!==2)throw Error('Invalid dashboard backup.');
@@ -124,8 +136,7 @@ export function validateSummary(r){
   if(!r.score.every(x=>Number.isFinite(x)&&x>=0&&x<=1000))throw Error('Invalid match score.');
   if(r.winnerTeam!==undefined&&![0,1].includes(r.winnerTeam))throw Error('Invalid match winner.');
   if(r.source==='live'&&(![0,1].includes(r.winnerTeam)||r.duration!==null||r.bumpAvailable||r.bumps.length||typeof r.capture?.rosterComplete!=='boolean'))throw Error('Invalid live match coverage.');
-  if(r.source==='live'&&r.players.some(p=>['tracked','speedIntegral','supersonic','air','boostStolen','boostCollected','boostUsed','bigStolen','smallStolen'].some(k=>p[k]!==null)))throw Error('Live movement and boost details must remain unknown.');
-  for(const p of r.players){if(typeof p.id!=='string'||![0,1].includes(p.team))throw Error('Invalid player identity.');for(const key of Object.keys(stat()))if(p[key]!==null&&(!Number.isFinite(p[key])||p[key]<0))throw Error('Invalid statistic.');}
+  for(const p of r.players){if(typeof p.id!=='string'||![0,1].includes(p.team))throw Error('Invalid player identity.');for(const key of Object.keys(stat()))if(p[key]!==null&&(!Number.isFinite(p[key])||p[key]<0))throw Error('Invalid statistic.');for(const key of EXTRA)if(p[key]!=null&&(!Number.isFinite(p[key])||p[key]<0))throw Error('Invalid statistic.');}
   if(r.date!==null && typeof r.date!=='string')throw Error('Invalid date.');
   if(r.sourceUrl && !/^https:\/\/ballchasing\.com\/replay\/[\w-]+$/.test(r.sourceUrl))r={...r,sourceUrl:null};
   return r;
