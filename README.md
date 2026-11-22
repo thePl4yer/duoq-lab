@@ -30,7 +30,7 @@ Good to know:
 
 - **Before setup** the job still runs and publishes the `data` branch from the existing matches. Only the match history part is off.
 - **Remove it any time:** delete the `LOGIN_KEY` secret (the stored logins become unreadable). To be thorough, also use *sign out everywhere* in your Epic account.
-- **Red ✗ on a run** means a login expired: repeat step 2 or 3.
+- **Red ✗ on a run** means a login expired or `LOGIN_KEY` was changed: repeat step 2 or 3.
 - Logs print counts only. The login link in the log is useless without your Epic password.
 - The logins are stored encrypted on the `data` branch. The match history comes from an unofficial interface of the game; a game update can break it until [rlapi](https://github.com/dank/rlapi) catches up.
 - Recommended: **Settings → Rules** on `main`, require a pull request with code-owner review. `.github/CODEOWNERS` already lists the files that can reach the secret.

@@ -37,7 +37,7 @@ async function renew(state,key,io){
   for(const role of ['player','scout'])if(state[role])try{
     const token=await psynet.refreshToken((await unlock(state[role],key)).refresh_token,io);mask(token.access_token);mask(token.refresh_token);
     state[role]=await lock({refresh_token:token.refresh_token},key);tokens[role]=token;
-  }catch{delete state[role];log(`${role}: login expired, connect it again (Actions > Collect matches > Run workflow > login)`);process.exitCode=1;}
+  }catch{delete state[role];log(`${role}: login expired or LOGIN_KEY changed, connect it again (Actions > Collect matches > Run workflow > login)`);process.exitCode=1;}
   await saveLogins(state);return tokens;
 }
 export function steamState(xml){

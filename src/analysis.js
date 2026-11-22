@@ -20,10 +20,10 @@ export function publicRow(r){const {hash,importedAt,...rest}=r,day=typeof r.date
 const stat = () => ({tracked:0,speedIntegral:0,supersonic:0,air:0,boostStolen:0,boostCollected:0,boostUsed:null,goals:0,assists:0,saves:0,shots:0,demos:0,bigStolen:0,smallStolen:0});
 export function modeId(value) {
   const s=String(value??'').toLowerCase();
-  if(s.includes('hoop')||s==='27')return 'hoops';
-  if(s.includes('dropshot')||s==='29')return 'dropshot';
-  if(s.includes('snow')||s==='30')return 'snowday';
-  if(s.includes('rumble')||s==='28')return 'rumble';
+  if(s.includes('hoop')||s==='27'||s==='17')return 'hoops';
+  if(s.includes('dropshot')||s==='29'||s==='23')return 'dropshot';
+  if(s.includes('snow')||s==='30'||s==='15')return 'snowday';
+  if(s.includes('rumble')||s==='28'||s==='18')return 'rumble';
   if(s.includes('standard')||s==='13'||s==='3')return 'standard';
   if(s.includes('double')||s==='11'||s==='2')return 'doubles';
   if(s.includes('duel')||s==='10'||s==='1')return 'duels';
