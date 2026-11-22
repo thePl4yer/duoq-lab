@@ -35,27 +35,17 @@ Good to know:
 - The logins are stored encrypted on the `data` branch. The match history comes from an unofficial interface of the game; a game update can break it until [rlapi](https://github.com/dank/rlapi) catches up.
 - Recommended: **Settings → Rules** on `main`, require a pull request with code-owner review. `.github/CODEOWNERS` already lists the files that can reach the secret.
 
-## Live tab
+## Live tab and sharing
 
-Close Rocket League, set this in `TAGame\Config\TAStatsAPI.ini`, restart the game:
+Setup steps are on the dashboard under **Data & settings**. Sharing from a browser needs its key approved: copy the key shown there into `data/keys.json` as `{"<key>": "<name>"}`.
 
-```ini
-[TAGame.MatchStatsExporter_TA]
-PacketSendRate=10
-WebPort=49124
-```
+What each number means: hover it on the dashboard.
 
-Then, on the PC that runs the game, press **● Connect game** at the top of the dashboard and pick **Allow** when Chrome asks about local network access. Chrome remembers it; the tab reconnects by itself. It only sees the match being played, so open it before you queue. [Connection test page](https://thepl4yer.github.io/duoq-lab/probe.html).
+## v0.3 in short
 
-Sharing from a browser needs its key approved: copy **Your key** from Data & settings into `data/keys.json` as `{"<key>": "<name>"}`.
-
-## What the numbers mean
-
-- **Boost stolen:** boost you denied an opponent. You take a pad and an opponent then drives over the empty pad before it respawns, or was under a second from reaching it. Amount = what that car would have gained. Standard maps, replays only.
-- **Boost tax:** the same test against your teammate, counted only when the taker had more boost.
-- **Tendencies:** whiffs, 50/50s, kickoffs, passes, first-man time, record after the first goal. Below ~30 games these are anecdotes.
-- **Dropshot damage:** read from the replay's network data.
-- **Bumps:** estimated by the replay parser. Demos are separate.
+- One-screen dashboard: no sidebar, top stats over the artwork, every comparison as a Kate / PLAYER row, definitions in tooltips.
+- One MMR chart per mode with both players; click a mode in Ranks.
+- Live capture reads the current game's message format.
 
 ## v0.2 in short
 
@@ -74,7 +64,8 @@ npm run dev   # http://127.0.0.1:4173
 
 | Path | Purpose |
 | --- | --- |
-| `src/app.js` | dashboard UI |
+| `src/app.js`, `src/ui.js` | dashboard UI, rows and charts ([DESIGN.md](DESIGN.md)) |
+| `src/tracker.js` | Tracker snapshot helpers |
 | `src/analysis.js` | summaries, merging, aggregation |
 | `src/replay.js`, `src/boost.js` | replay → summary, steal analysis |
 | `src/live.js` | local Stats API capture |

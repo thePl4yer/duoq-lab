@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {trackerResultSummary} from '../src/tracker-results.js';
+import {trackerResultSummary} from '../src/tracker.js';
 test('Calendar denominator includes absent replays; mixed wins are counted once overall and never assigned to modes',()=>{
  const profile={daily:[{matches:20}],sessions:[{relative:'2 hours ago',rows:[{playlist:'Hoops',result:'3 Wins'},{playlist:'Multiple',result:'4 Wins MVP'},{playlist:'Hoops',result:'Defeat'},{playlist:'Rumble',result:'7 Matches'}]}]};
  const all=trackerResultSummary(profile);assert.equal(all.total,20);assert.equal(all.wins,7);assert.equal(all.lower,35);assert.equal(all.upper,95);assert.equal(all.unknown,12);
