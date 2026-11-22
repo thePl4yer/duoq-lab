@@ -160,7 +160,7 @@ let liveSocket=null;
 function live(on,quiet=false){
   const button=$('#live-button'),say=(text,mode)=>{button.dataset.tip=text;button.dataset.state=mode;button.querySelector('span').textContent=mode==='off'?'Connect game':mode==='wait'?'Waiting':'Live';};
   localStorage.setItem('duoq.live',on?'1':'0');
-  if(!on){liveSocket?.close();liveSocket=null;say('Capture matches from Rocket League on this PC. Setup: Data & settings.','off');return;}
+  if(!on){liveSocket?.close();liveSocket=null;say('Records each online match when it ends, while this tab is open during play. Already played matches: use Folder. Setup: Data & settings.','off');return;}
   const collector=new MatchCollector({onNotice:m=>say(m,'on'),onSummary:row=>{say(`Captured a match (${row.score.join(' : ')}). Click to stop.`,'on');toast(`Match captured: ${row.score.join(' : ')}`);addRows([row]);}});
   let warned=quiet;
   const connect=()=>{
@@ -175,14 +175,20 @@ function live(on,quiet=false){
 
 $('#upload-button').onclick=$('#import-json-button').onclick=()=>$('#replay-files').click();
 $('#replay-files').onchange=e=>importFiles(e.target.files);$('#folder-files').onchange=e=>importFiles(e.target.files);
+async function syncFolder(folder){
+  const started=Date.now(),since=await dbRead('folderSync')??0,files=[];
+  for await(const entry of folder.values())if(entry.kind==='file'&&/\.replay$/i.test(entry.name)){const file=await entry.getFile();if(file.lastModified>since)files.push(file);}
+  if(files.length){await importFiles(files);await dbWrite('folderSync',started);}
+  return files.length;
+}
 $('#folder-button').onclick=async()=>{
   if(!window.showDirectoryPicker)return $('#folder-files').click();
   try{let folder=await dbRead('folder');if(!folder||await folder.requestPermission({mode:'read'})!=='granted'){folder=await showDirectoryPicker({id:'duoq-replays',mode:'read'});await dbWrite('folder',folder);}
-    const since=await dbRead('folderSync')??0,files=[];for await(const entry of folder.values())if(entry.kind==='file'&&/\.replay$/i.test(entry.name)){const file=await entry.getFile();if(file.lastModified>since)files.push(file);}
-    if(!files.length)return toast('No new replays in that folder.');
-    await importFiles(files);await dbWrite('folderSync',Date.now());
+    if(!await syncFolder(folder))toast('No new replays in that folder.');
   }catch(e){if(e.name!=='AbortError')toast(e.message,true);}
 };
+// Runs once when the page opens, only if Chrome already allows the folder ("Allow on every visit"). Never prompts.
+async function autoSyncFolder(){try{const folder=await dbRead('folder');if(await folder?.queryPermission?.({mode:'read'})==='granted')await syncFolder(folder);}catch{}}
 $('#live-button').onclick=()=>live(localStorage.getItem('duoq.live')!=='1');
 $('#cancel-import').onclick=()=>{aborted=true;parseFile.cancel?.();};
 document.addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files')){e.preventDefault();document.body.classList.add('dragging');}});
@@ -225,6 +231,7 @@ async function boot(){
       const have=new Set(rows.map(r=>r.id.toUpperCase())),waiting=outbox.ids().filter(id=>!have.has(id.toUpperCase()));outbox.set(waiting);
       share(stored.filter(r=>waiting.includes(r.id)).slice(0,20));
     }).catch(()=>{state.status='shared dataset unreachable, bundled data shown';renderStatus();});
+    autoSyncFolder();
     if(localStorage.getItem('duoq.live')==='1')live(true,true);
   }catch(e){toast(e.message,true);$('#status').textContent='The data could not be loaded.';}
 }

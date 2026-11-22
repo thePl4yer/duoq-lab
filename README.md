@@ -8,7 +8,7 @@ Rocket League dashboard for **Kate** and **P L 4 Y E R**: replay stats, boost st
 
 | Source | Gives | You do |
 | --- | --- | --- |
-| Replay files | everything | drop files, or **Sync replay folder** (Chrome remembers the folder) |
+| Replay files | everything | **Folder** once; with Chrome's "Allow on every visit", new saved replays import whenever the page opens |
 | Daily job | last 20 matches of PLAYER's account, analysed from Rocket League's own replays | one-time setup below |
 | Live tab | result, goals, own-team speed and boost | keep the dashboard open while playing |
 
