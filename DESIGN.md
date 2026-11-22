@@ -32,7 +32,7 @@ Player colours mean a player and nothing else. The accent is never a player.
 ## Layout
 
 - No sidebar. Hero band (art + title + tools + four big stats), one filter bar, then a card grid: `repeat(auto-fill, minmax(300px,1fr))`, dense packing. Phone: two columns.
-- Matches and Data & settings are inline accordions below the grid. Frequent actions (add replays, folder sync, live) sit in the hero, never in a dialog.
+- Matches and Data & settings are inline accordions below the grid. Frequent actions (add files, live, history) sit in the hero, never in a dialog.
 - Dialogs only for detail: one match, bump events, boost tax events, About the data.
 
 ## Components

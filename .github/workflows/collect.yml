@@ -1,7 +1,7 @@
 name: Collect matches
 on:
   schedule:
-    - cron: '17 */4 * * *' # every 4 h keeps the login alive; matches are read in the 04:17 UTC run only (05:17 CET / 06:17 CEST)
+    - cron: '17 */2 * * *' # every 2 h keeps the logins alive (Epic refresh tokens last hours; GitHub delays or drops some runs); matches are read in the 04:17 UTC run only (05:17 CET / 06:17 CEST)
   workflow_dispatch:
     inputs:
       login:
@@ -9,6 +9,10 @@ on:
         type: choice
         options: ['', player, scout]
         default: ''
+      in_game:
+        description: 'Read match history even if PLAYER is in a match right now. Rocket League will disconnect him (duplicate login).'
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -35,6 +39,7 @@ jobs:
           LOGIN_KEY: ${{ secrets.LOGIN_KEY }}
           LOGIN: ${{ inputs.login }}
           FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          ALLOW_ONLINE: ${{ inputs.in_game == true }}
           DATA_DIR: store
       - name: Save the data branch
         if: always()

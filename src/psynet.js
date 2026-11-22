@@ -29,7 +29,7 @@ export async function buildInfo(io=defaults){
 }
 
 async function eos(path,params,io,basic=true){
-  const response=await io.fetch(EOS_URL+path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',...(basic?{Authorization:'Basic '+btoa(EOS.id+':'+EOS.secret)}:{})},body:new URLSearchParams(params).toString(),signal:AbortSignal.timeout(20000)});
+  const response=await io.fetch(EOS_URL+path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'UELauncher/11.0.1-14907503+++Portal+Release-Live Windows/10.0.19041.1.256.64bit',...(basic?{Authorization:'Basic '+btoa(EOS.id+':'+EOS.secret)}:{})},body:new URLSearchParams(params).toString(),signal:AbortSignal.timeout(20000)});
   const data=await response.json().catch(()=>({}));
   return {ok:response.ok,status:response.status,data};
 }
@@ -47,7 +47,7 @@ export async function deviceToken(device,io=defaults){
 }
 export async function refreshToken(refresh,io=defaults){
   const r=await grant({grant_type:'refresh_token',refresh_token:refresh},io);
-  if(!r.ok||!r.data.access_token)throw Error('Epic login expired (HTTP '+r.status+'). Log in again.');
+  if(!r.ok||!r.data.access_token)throw Object.assign(Error(`Epic answered HTTP ${r.status}`),{status:r.status});
   return r.data;
 }
 
@@ -81,8 +81,8 @@ export async function connect(token,io=defaults){
     },
     close(){fail(Error('closed'));socket.close();}};
 }
-// Last 20 matches of the logged-in account, each {ReplayUrl, Match:{MatchGUID, Playlist, Players:[…], …}}.
-export const matchHistory=async rpc=>(await rpc.call('Matches/GetMatchHistory v1',{PlayerID:rpc.player})).Matches??[];
+// Last 20 matches, each {ReplayUrl, Match:{MatchGUID, Playlist, Players:[…], …}}. Defaults to the logged-in account.
+export const matchHistory=async(rpc,playerId=rpc.player)=>(await rpc.call('Matches/GetMatchHistory v1',{PlayerID:playerId})).Matches??[];
 // True when Rocket League reports any of the player ids ("Steam|<id>|0") as not offline. Unknown answers count as online.
 export async function anyOnline(rpc,ids){
   const rows=(await rpc.call('Players/GetProfile v1',{PlayerIDs:ids})).PlayerData;

@@ -2,7 +2,9 @@ import {PLAYERS,MODES,aggregate,pairInfo,fromBallchasing,mergeReplays,validateSu
 import {trackerDefaultRanks,trackerResultSummary} from './tracker.js';
 import {fetchStore,identity,seal,publish} from './store.js';
 import {MatchCollector,SOCKET_URL} from './live.js';
-import {$,$$,esc,fmt,berlin,showContent,toast,row,line,note,countUp,chart,tooltips} from './ui.js';
+import {$,$$,esc,fmt,berlin,showContent,toast,row,line,note,countUp,chart,tooltips,debug,debugTrail} from './ui.js';
+addEventListener('error',e=>debug('uncaught',e.error??e.message));
+addEventListener('unhandledrejection',e=>debug('uncaught',e.reason));
 const [KATE,PLAYER]=PLAYERS,COLOR={[KATE.id]:'var(--kate)',[PLAYER.id]:'var(--player)'};
 const day=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}),utcDay=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
 const minutes=s=>{if(!Number.isFinite(s))return '—';const value=Math.round(s);return `${Math.floor(value/60)}:${String(value%60).padStart(2,'0')}`;};
@@ -16,7 +18,7 @@ tooltips();
 async function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('duoq-lab',1);req.onupgradeneeded=()=>req.result.createObjectStore('workspace');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function dbRead(key){if(!db)return null;return new Promise((resolve,reject)=>{const req=db.transaction('workspace').objectStore('workspace').get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function dbWrite(key,value){if(!db)throw Error('Local storage is unavailable. Export your data before closing this page.');return new Promise((resolve,reject)=>{const tx=db.transaction('workspace','readwrite');tx.objectStore('workspace').put(value,key);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}
-async function saveImports(){try{await dbWrite('replays',stored);}catch(e){toast(e.message,true);}}
+async function saveImports(){try{await dbWrite('replays',stored);}catch(e){debug('storage',e);toast(e.message,true);}}
 function filtered(){return state.replays.filter(r=>{if(state.mode!=='all'&&r.mode!==state.mode)return false;if(state.period!=='all'){const d=new Date(r.date?.replace(' ','T'));if(!Number.isFinite(+d)||Date.now()-d>Number(state.period)*86400000)return false;}return true;});}
 
 function render(){
@@ -104,13 +106,13 @@ function showAbout(){
 ${t?PLAYERS.map(base=>`<h3 class="${base===KATE?'k':'p'}">${esc(base.name)} · recent Tracker sessions <a href="${esc(t.profiles[base.id].source)}" target="_blank" rel="noreferrer">↗</a></h3><div class="event-list">${t.profiles[base.id].recent.map(s=>`<div><span>${esc(s.label)}</span><small>${esc(s.when)}</small></div>`).join('')}</div>`).join(''):''}
 <p class="muted">Replay parser: <a href="https://github.com/rlrml/subtr-actor" target="_blank" rel="noreferrer">subtr-actor 1.5.1</a> (MIT). Setup and data flow: <a href="https://github.com/thePl4yer/duoq-lab#readme" target="_blank" rel="noreferrer">README</a>.</p>`);
 }
-const outbox={ids:()=>{try{return JSON.parse(localStorage.getItem('duoq.outbox')??'[]');}catch{return [];}},set:ids=>localStorage.setItem('duoq.outbox',JSON.stringify([...new Set(ids)].slice(-500)))};
+const outbox={ids:()=>{try{return JSON.parse(localStorage.getItem('duoq.outbox')??'[]');}catch(e){debug('outbox',e);return [];}},set:ids=>localStorage.setItem('duoq.outbox',JSON.stringify([...new Set(ids)].slice(-500)))};
 async function share(rows){
   if(!$('#share-publicly').checked)return;
   const list=rows.filter(r=>!$('#duo-only').checked||pairInfo(r).both);if(!list.length)return;
   try{const me=await identity();let sent=0;for(const row of list){if(await publish(await seal(row,me.secret)))sent++;outbox.set([...outbox.ids(),row.id]);}
     state.status=sent?`${sent} sent, shown after the next daily run`:'no relay reachable, retry on next visit';
-  }catch(error){state.status=`saved here, sharing failed: ${error.message}`;}
+  }catch(error){debug('share',error);state.status=`saved here, sharing failed: ${error.message}`;}
   renderStatus();
 }
 async function addRows(rows){
@@ -142,10 +144,10 @@ async function importFiles(fileList){
         const result=await parseFile(file,hash);
         if(result){await addRows([result]);imported++;}else skipped++;
       }
-    }catch(e){errors.push(`${file.name}: ${String(e.message??e)}`);}
+    }catch(e){debug('import',file.name,e);errors.push(`${file.name}: ${String(e.message??e)}`);}
     finally{$('#progress-bar').value=i+1;}
   }
-  importing=false;$('#import-progress').hidden=true;$('#replay-files').value='';$('#folder-files').value='';
+  importing=false;$('#import-progress').hidden=true;$('#replay-files').value='';
   toast(`${aborted?'Cancelled. ':''}${imported} imported · ${skipped} without you or already there · ${errors.length} errors.`,errors.length>0);
   if(errors.length)showContent('Import results',`<p>${imported} replays imported. Successful imports stay saved.</p><ul>${errors.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`);
 }
@@ -155,34 +157,37 @@ function fillRankForm(){
   $('#rank-fields').innerHTML=MODES.map(m=>`<div class="rank-input"><span>${m.name}</span>${PLAYERS.map((p,i)=>{const r=state.ranks[p.id]?.[m.id];return `<input class="${i?'p':'k'}" type="number" min="0" max="5000" step="1" name="${p.id}-${m.id}-mmr" placeholder="MMR" aria-label="${esc(p.name)} ${m.name} MMR" value="${r?.mmr??''}"><input name="${p.id}-${m.id}-tier" aria-label="${esc(p.name)} ${m.name} rank" placeholder="Rank" maxlength="60" value="${esc(r?.tier??'')}">`;}).join('')}</div>`).join('');
 }
 // The signing library is only needed for the key and for sharing, so it is not loaded at startup.
-function showKey(){showKey=()=>{};identity().then(async me=>{$('#share-key').textContent=me.key;const keys=await fetch('./data/keys.json').then(r=>r.json()).catch(()=>({}));$('#key-status').textContent=keys[me.key]?'approved':'not approved yet';}).catch(()=>{});}
+function showKey(){showKey=()=>{};identity().then(async me=>{$('#share-key').textContent=me.key;const keys=await fetch('./data/keys.json').then(r=>r.json()).catch(e=>{debug('keys',e);return {};});$('#key-status').textContent=keys[me.key]?'approved':'not approved yet';}).catch(e=>{debug('key',e);$('#key-status').textContent='unavailable: '+e.message;});}
 let liveSocket=null;
 function live(on,quiet=false){
   const button=$('#live-button'),say=(text,mode)=>{button.dataset.tip=text;button.dataset.state=mode;button.querySelector('span').textContent=mode==='off'?'Connect game':mode==='wait'?'Waiting':'Live';};
   localStorage.setItem('duoq.live',on?'1':'0');
-  if(!on){liveSocket?.close();liveSocket=null;say('Capture matches from Rocket League on this PC. Setup: Data & settings.','off');return;}
-  const collector=new MatchCollector({onNotice:m=>say(m,'on'),onSummary:row=>{say(`Captured a match (${row.score.join(' : ')}). Click to stop.`,'on');toast(`Match captured: ${row.score.join(' : ')}`);addRows([row]);}});
-  let warned=quiet;
+  if(!on){liveSocket?.close();liveSocket=null;say('Records each online match when it ends, while this tab is open. Older matches come from the nightly job. Setup: Data & settings.','off');return;}
+  const collector=new MatchCollector({
+    onNotice:m=>{debug('live',m);say(m,'on');},
+    onDebug:(reason,detail)=>detail===undefined?debug('live','ignored:',reason):debug('live','ignored:',reason,detail),
+    onSummary:row=>{debug('live','match captured',{score:row.score,players:row.players.length,speed:row.players.some(p=>p.tracked)});say(`Captured a match (${row.score.join(' : ')}). Click to stop.`,'on');toast(`Match captured: ${row.score.join(' : ')}`);addRows([row]).catch(e=>debug('save',e));}});
+  let warned=quiet,failures=0;
   const connect=()=>{
     if(localStorage.getItem('duoq.live')!=='1')return;
-    const socket=liveSocket=new WebSocket(SOCKET_URL);let opened=false;
-    socket.onopen=()=>{opened=true;say('Connected. Waiting for a match to finish. Click to stop.','on');};
-    socket.onmessage=e=>{if(typeof e.data==='string'&&e.data.length<1048576)try{collector.accept(JSON.parse(e.data));}catch{}};
-    socket.onclose=()=>{collector.disconnect();if(liveSocket!==socket)return;const text=opened?'Rocket League closed. Waiting for it to start again. Click to stop.':'Rocket League not found. Start it with the Stats API enabled and allow local network access (Data & settings). Click to stop.';say(text,'wait');if(!opened&&!warned){warned=true;toast(text);}setTimeout(connect,5000);};
+    if(!failures)debug('live','connecting to',SOCKET_URL);
+    let socket;try{socket=liveSocket=new WebSocket(SOCKET_URL);}catch(e){debug('live',e);say(`The browser refused the connection: ${e.message}`,'off');localStorage.setItem('duoq.live','0');return;}
+    let opened=false,messages=0,bad=0;
+    socket.onopen=()=>{opened=true;failures=0;debug('live','connected');say('Connected. Waiting for a match to finish. Click to stop.','on');};
+    socket.onmessage=e=>{
+      if(typeof e.data!=='string'||e.data.length>=1048576)return debug('live','message skipped: not text or over 1 MB',typeof e.data==='string'?e.data.length:typeof e.data);
+      let message;try{message=JSON.parse(e.data);}catch(error){if(bad++<3)debug('live','message is not JSON',error,e.data.slice(0,120));return;}
+      if(!messages++)debug('live','first message',{Event:message?.Event,Data:typeof message?.Data});
+      try{collector.accept(message);}catch(error){debug('live','message failed',message?.Event,error);}
+    };
+    socket.onerror=()=>{if(opened||!failures)debug('live','socket error (nothing listening on port 49124, or the browser blocked local network access)');};
+    socket.onclose=e=>{if(opened||!failures++||failures%60===0)debug('live','closed',{code:e.code,reason:e.reason,clean:e.wasClean,opened,messages,attempts:failures});collector.disconnect();if(liveSocket!==socket)return;const text=opened?'Rocket League closed. Waiting for it to start again. Click to stop.':'Rocket League not found. Start it with the Stats API enabled and allow local network access (Data & settings). Click to stop.';say(text,'wait');if(!opened&&!warned){warned=true;toast(text);}setTimeout(connect,5000);};
   };
   say('Connecting …','wait');connect();
 }
 
 $('#upload-button').onclick=$('#import-json-button').onclick=()=>$('#replay-files').click();
-$('#replay-files').onchange=e=>importFiles(e.target.files);$('#folder-files').onchange=e=>importFiles(e.target.files);
-$('#folder-button').onclick=async()=>{
-  if(!window.showDirectoryPicker)return $('#folder-files').click();
-  try{let folder=await dbRead('folder');if(!folder||await folder.requestPermission({mode:'read'})!=='granted'){folder=await showDirectoryPicker({id:'duoq-replays',mode:'read'});await dbWrite('folder',folder);}
-    const since=await dbRead('folderSync')??0,files=[];for await(const entry of folder.values())if(entry.kind==='file'&&/\.replay$/i.test(entry.name)){const file=await entry.getFile();if(file.lastModified>since)files.push(file);}
-    if(!files.length)return toast('No new replays in that folder.');
-    await importFiles(files);await dbWrite('folderSync',Date.now());
-  }catch(e){if(e.name!=='AbortError')toast(e.message,true);}
-};
+$('#replay-files').onchange=e=>importFiles(e.target.files);
 $('#live-button').onclick=()=>live(localStorage.getItem('duoq.live')!=='1');
 $('#cancel-import').onclick=()=>{aborted=true;parseFile.cancel?.();};
 document.addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files')){e.preventDefault();document.body.classList.add('dragging');}});
@@ -203,29 +208,31 @@ $('#about-button').onclick=showAbout;
 document.addEventListener('keydown',e=>{const el=e.target.closest?.('[data-action]');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();el.click();}});
 $('#cookie').onclick=()=>toast('Kate took the boost. You get a cookie. Fair trade? 🍪');
 $('#settings').addEventListener('toggle',e=>{if(e.target.open){fillRankForm();showKey();}});
+$('#copy-debug').onclick=()=>{const text=`duoq-lab debug log, ${new Date().toISOString()}\n${navigator.userAgent}\n${debugTrail()||'(empty)'}`;navigator.clipboard.writeText(text).then(()=>toast('Debug log copied. Paste it into the chat.'),e=>{debug('clipboard',e);showContent('Debug log',`<pre class="log">${esc(text)}</pre>`);});};
 $('#copy-key').onclick=()=>navigator.clipboard.writeText($('#share-key').textContent).then(()=>toast('Key copied. Send it to the repository owner.'));
 $('#backup-button').onclick=downloadBackup;
 $$('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
-$('#rank-form').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),season=$('#rank-season').value.trim();const ranks={};for(const p of PLAYERS){ranks[p.id]={};for(const m of MODES){const mmr=f.get(`${p.id}-${m.id}-mmr`);if(mmr==='')continue;const value=Number(mmr);if(!Number.isFinite(value)||value<0||value>5000){toast('Enter a valid MMR.',true);return;}ranks[p.id][m.id]={mmr:value,tier:String(f.get(`${p.id}-${m.id}-tier`)??''),division:'',season,source:'manual',updatedAt:new Date().toISOString()};}}state.ranks=ranks;state.season=season;try{await dbWrite('ranks',{ranks,season});toast('Ranks saved.');render();}catch(e){toast(e.message,true);}};
-$('#tracker-import').onclick=async()=>{try{const id=$('#tracker-player').value;const ranks=trackerRanks(JSON.parse($('#tracker-json').value),id);state.ranks[id]=ranks;await dbWrite('ranks',{ranks:state.ranks,season:state.season});$('#tracker-json').value='';toast('Tracker ranks imported.');render();}catch(e){toast(e.message,true);}};
+$('#rank-form').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),season=$('#rank-season').value.trim();const ranks={};for(const p of PLAYERS){ranks[p.id]={};for(const m of MODES){const mmr=f.get(`${p.id}-${m.id}-mmr`);if(mmr==='')continue;const value=Number(mmr);if(!Number.isFinite(value)||value<0||value>5000){toast('Enter a valid MMR.',true);return;}ranks[p.id][m.id]={mmr:value,tier:String(f.get(`${p.id}-${m.id}-tier`)??''),division:'',season,source:'manual',updatedAt:new Date().toISOString()};}}state.ranks=ranks;state.season=season;try{await dbWrite('ranks',{ranks,season});toast('Ranks saved.');render();}catch(e){debug('ranks',e);toast(e.message,true);}};
+$('#tracker-import').onclick=async()=>{try{const id=$('#tracker-player').value;const ranks=trackerRanks(JSON.parse($('#tracker-json').value),id);state.ranks[id]=ranks;await dbWrite('ranks',{ranks:state.ranks,season:state.season});$('#tracker-json').value='';toast('Tracker ranks imported.');render();}catch(e){debug('tracker',e);toast(e.message,true);}};
 $('#reset-button').onclick=()=>{showContent('Reset local data?',`<p>Removes your browser imports and manual ranks. Shared results stay in the public dataset. Export a backup first if you want one.</p><button class="button danger" id="confirm-reset">Reset now</button>`);$('#confirm-reset').onclick=async()=>{await dbWrite('replays',[]);await dbWrite('ranks',{ranks:{},season:''});stored=[];state.ranks=state.tracker?trackerDefaultRanks(state.tracker):{};state.season=state.tracker?.season??'';state.replays=(await fetch('./data/seed.json').then(r=>r.json())).map(validateSummary);$('#detail-dialog').close();render();toast('Local data reset.');};};
 window.addEventListener('beforeunload',e=>{if(importing){e.preventDefault();e.returnValue='';}});
 async function boot(){
   try{
     const get=file=>fetch(`./data/${file}`).then(r=>{if(!r.ok)throw Error(`${file} could not be loaded.`);return r.json();});
-    const [seed,coverage,tracker,results,history]=await Promise.all([get('seed.json'),get('coverage.json').catch(()=>({})),get('tracker.json').catch(()=>null),get('tracker-results.json').catch(()=>null),get('rank-history.json').catch(()=>null)]);
+    const optional=(file,fallback)=>get(file).catch(e=>{debug('boot',e);return fallback;});
+    const [seed,coverage,tracker,results,history]=await Promise.all([get('seed.json'),optional('coverage.json',{}),optional('tracker.json',null),optional('tracker-results.json',null),optional('rank-history.json',null)]);
     Object.assign(state,{replays:seed.map(validateSummary),coverage,tracker,results,history});
     if(tracker){state.ranks=trackerDefaultRanks(tracker);state.season=tracker.season;}
-    try{db=await openDB();stored=(await dbRead('replays')??[]).map(validateSummary);const saved=await dbRead('ranks');if(saved?.ranks&&Object.keys(saved.ranks).length){const imported=cleanRanks(saved.ranks);for(const base of PLAYERS)state.ranks[base.id]={...state.ranks[base.id],...imported[base.id]};state.season=saved.season||state.season;}state.replays=mergeReplays(state.replays,stored);}catch(e){toast(`Browser storage is unavailable: ${e.message}`,true);}
+    try{db=await openDB();stored=(await dbRead('replays')??[]).map(validateSummary);const saved=await dbRead('ranks');if(saved?.ranks&&Object.keys(saved.ranks).length){const imported=cleanRanks(saved.ranks);for(const base of PLAYERS)state.ranks[base.id]={...state.ranks[base.id],...imported[base.id]};state.season=saved.season||state.season;}state.replays=mergeReplays(state.replays,stored);}catch(e){debug('storage',e);toast(`Browser storage is unavailable: ${e.message}`,true);}
     state.status='loading shared dataset';render();
     fetchStore().then(rows=>{state.replays=mergeReplays(state.replays,rows);
       for(const r of [...state.replays].reverse())for(const q of r.players)if(q.rank&&MODES.some(m=>m.id===r.mode))(state.ranks[q.id]??={})[r.mode]={mmr:q.rank.mmr,tier:tierName(q.rank.tier),division:`Div ${q.rank.division+1}`,season:'match history',source:'history',updatedAt:r.date};
       state.status='shared dataset loaded';render();
       const have=new Set(rows.map(r=>r.id.toUpperCase())),waiting=outbox.ids().filter(id=>!have.has(id.toUpperCase()));outbox.set(waiting);
       share(stored.filter(r=>waiting.includes(r.id)).slice(0,20));
-    }).catch(()=>{state.status='shared dataset unreachable, bundled data shown';renderStatus();});
+    }).catch(e=>{debug('store',e);state.status='shared dataset unreachable, bundled data shown';renderStatus();});
     if(localStorage.getItem('duoq.live')==='1')live(true,true);
-  }catch(e){toast(e.message,true);$('#status').textContent='The data could not be loaded.';}
+  }catch(e){debug('boot',e);toast(e.message,true);$('#status').textContent='The data could not be loaded.';}
 }
 boot();

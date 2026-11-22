@@ -32,24 +32,27 @@ export function validateAliases(aliases={}){
   return new Map(Object.entries(aliases).map(([key,value])=>[key.toLowerCase(),value]));
 }
 export class MatchCollector{
-  constructor({onSummary,onNotice=()=>{},aliases={},settleMs=2500,now=()=>Date.now()}={}){
-    Object.assign(this,{onSummary,onNotice,settleMs,now,aliases:validateAliases(aliases),matches:new Map(),finished:new Set(),replays:new Set(),unnamed:false});
+  constructor({onSummary,onNotice=()=>{},onDebug=()=>{},aliases={},settleMs=2500,now=()=>Date.now()}={}){
+    Object.assign(this,{onSummary,onNotice,onDebug,settleMs,now,aliases:validateAliases(aliases),matches:new Map(),finished:new Set(),replays:new Set(),unnamed:false,reasons:new Set()});
   }
+  // Reports each reason for ignoring messages once per connection, for debugging.
+  drop(reason,detail){if(this.reasons.has(reason))return;this.reasons.add(reason);this.onDebug(reason,detail);}
   identity(value){
     if(typeof value!=='string')return null;
     const steam=/^Steam\|(\d{17})\|0$/i.exec(value)?.[1];
     return steam&&Object.hasOwn(TARGETS,steam)?steam:this.aliases.get(value.toLowerCase())??null;
   }
   accept(message){
-    if(!message||typeof message!=='object')return;
+    if(!message||typeof message!=='object')return this.drop('message is not an object');
     // Current game builds send Data as a JSON-encoded string inside the envelope.
     let data=message.Data;
-    if(typeof data==='string')try{data=JSON.parse(data);}catch{return;}
-    if(!data||typeof data!=='object')return;
+    if(typeof data==='string')try{data=JSON.parse(data);}catch{return this.drop('Data is not valid JSON',data.slice(0,120));}
+    if(!data||typeof data!=='object')return this.drop('message without Data');
     const event=message.Event;
-    if(!['UpdateState','MatchCreated','MatchInitialized','MatchEnded','MatchDestroyed','ReplayCreated','CountdownBegin'].includes(event))return;
+    if(!['UpdateState','MatchCreated','MatchInitialized','MatchEnded','MatchDestroyed','ReplayCreated','CountdownBegin'].includes(event))return this.drop(`event not used: ${event}`);
     // The game sets MatchGuid only for online and LAN matches.
     if(!validGuid(data.MatchGuid)){
+      this.drop(`no match id on ${event} (private or offline match)`);
       if(event==='MatchDestroyed')this.unnamed=false;
       else if(event==='UpdateState'&&data.Game?.bReplay===false&&!this.unnamed){this.unnamed=true;this.onNotice('Private or offline match: Rocket League sends no match ID here, so it is not recorded. Online matches are.');}
       return;
@@ -64,10 +67,11 @@ export class MatchCollector{
     if(event==='MatchDestroyed'){existing?.winner!=null?this.finish(id):this.discard(id);return;}
     if(event==='MatchEnded'){if(existing&&[0,1].includes(data.WinnerTeamNum)){existing.winner=data.WinnerTeamNum;this.schedule(existing);}return;}
     const game=data.Game;
-    if(!game||!Array.isArray(data.Players)||!Array.isArray(game.Teams)||game.bReplay!==false&&!(game.bReplay===true&&existing?.live))return;
+    if(!game||!Array.isArray(data.Players)||!Array.isArray(game.Teams))return this.drop('UpdateState without Game, Players or Teams',Object.keys(data));
+    if(game.bReplay!==false&&!(game.bReplay===true&&existing?.live))return this.drop(`replay or unknown playback state (bReplay=${game.bReplay})`);
     const playlist=Number.isInteger(game.PlaylistId)&&game.PlaylistId>=1&&game.PlaylistId<=1000?game.PlaylistId:null;
     const score=[0,1].map(team=>game.Teams.find(t=>t.TeamNum===team)?.Score);
-    if(!score.every(x=>number(x,1000)))return;
+    if(!score.every(x=>number(x,1000)))return this.drop('team scores missing',game.Teams.map(t=>t.TeamNum));
     const m=this.ensure(id),now=this.now()/1000,dt=Math.min(Math.max(now-(m.tick??now),0),.5),playing=game.bReplay===false&&game.bHasWinner!==true&&m.winner===null;
     Object.assign(m,{live:true,score,playlist:playlist??m.playlist,tick:now});
     if(m.winner!==null)m.finalSnapshot=true;
@@ -85,6 +89,7 @@ export class MatchCollector{
         else{if(t.boost!==null){const change=entry.Boost-t.boost;if(change>=3)t.boostCollected+=change;else if(change<0)t.boostUsed-=change;}t.boost=entry.Boost;}
       }
     }
+    if(!m.players.size)this.drop('no configured player in this match',data.Players.map(p=>String(p.PrimaryId??'').split('|')[0]));
     if(game.bHasWinner===true){
       const winner=game.Teams.find(t=>typeof t.Name==='string'&&t.Name===game.Winner)?.TeamNum;
       if([0,1].includes(winner)){m.winner=winner;m.finalSnapshot=true;this.schedule(m);}
@@ -101,7 +106,7 @@ export class MatchCollector{
   finish(id){
     const m=this.matches.get(id);if(!m)return;
     this.discard(id);this.finished.add(id);if(this.finished.size>10000)this.finished.delete(this.finished.values().next().value);
-    if(!m.live||m.invalid||m.winner===null||!m.score||!m.players.size){this.onNotice('Skipped a match without a confirmed result for a configured player.');return;}
+    if(!m.live||m.invalid||m.winner===null||!m.score||!m.players.size){this.onDebug('match skipped',{live:m.live,invalid:!!m.invalid,winner:m.winner,score:m.score,players:m.players.size});this.onNotice('Skipped a match without a confirmed result for a configured player.');return;}
     const players=[...m.players.values()].map(p=>{const t=m.telemetry.get(p.id);return t&&t.tracked>20?{...p,...t}:p;});
     this.onSummary(projectSummary({schema:1,source:'live',id,date:m.date,playlist:m.playlist,score:m.score,winnerTeam:m.winner,players,capture:{rosterComplete:m.initialized,finalSnapshot:m.finalSnapshot===true}}));
   }
