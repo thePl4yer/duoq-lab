@@ -8,13 +8,29 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function showContent(title,html){$('#detail-title').textContent=title;$('#detail-body').innerHTML=html;$('#detail-dialog').showModal();}
 export function toast(message,error=false){const el=$('#toast');el.textContent=message;el.className=`toast show${error?' error':''}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),error?11000:6500);}
 const tipAttr=tip=>tip?` data-tip="${esc(tip)}" tabindex="0"`:'';
+// One floating tooltip for every [data-tip]: hover, keyboard focus or tap. Placed next to its element and kept on screen.
+export function tooltips(){
+  const tip=document.createElement('div');tip.className='tip';tip.id='tip';tip.setAttribute('role','tooltip');tip.hidden=true;document.body.append(tip);
+  let owner=null;
+  const hide=()=>{owner?.removeAttribute('aria-describedby');owner=null;tip.hidden=true;};
+  const show=el=>{if(owner!==el)hide();owner=el;el.setAttribute('aria-describedby','tip');tip.textContent=el.dataset.tip;tip.hidden=false;
+    const r=el.getBoundingClientRect(),above=r.top-tip.offsetHeight-6;
+    tip.style.left=`${Math.min(Math.max(8,r.left),innerWidth-tip.offsetWidth-8)}px`;tip.style.top=`${above>=8?above:r.bottom+6}px`;};
+  const target=e=>e.target.closest?.('[data-tip]');
+  document.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse')return;const el=target(e);el?show(el):hide();});
+  document.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;const el=target(e);el&&el!==owner?show(el):hide();});
+  document.addEventListener('focusin',e=>{const el=target(e);if(el&&e.target.matches(':focus-visible'))show(el);});
+  document.addEventListener('focusout',e=>{if(e.target===owner)hide();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')hide();});
+  addEventListener('scroll',hide,{passive:true});
+}
 // Kate value, PLAYER value and a split bar. Rows with no value on either side are left out.
 export function row(label,k,p,{tip='',unit='',digits=0,text=false,bar=!text,action=''}={}){
   const has=v=>text?v!=null&&v!=='—':Number.isFinite(v);
   if(!has(k)&&!has(p))return '';
   const show=v=>text?esc(v??'—'):fmt(v,digits)+(Number.isFinite(v)?unit:'');
   const split=bar&&has(k)&&has(p)&&k+p>0?` style="--k:${(100*k/(k+p)).toFixed(1)}%"`:'';
-  return `<div class="row${split?' split':''}${action?' action':''}"${split}${tipAttr(tip)}${action?` data-action="${action}"`:''}><span>${label}</span><b class="k">${show(k)}</b><b class="p">${show(p)}</b></div>`;
+  return `<div class="row${split?' split':''}${action?' action':''}"${split}${tipAttr(tip)}${action?` data-action="${action}" role="button"${tip?'':' tabindex="0"'}`:''}><span>${label}</span><b class="k">${show(k)}</b><b class="p">${show(p)}</b></div>`;
 }
 export const line=(label,value,tip='')=>`<div class="row one"${tipAttr(tip)}><span>${label}</span><b>${value}</b></div>`;
 export const note=(text,tip='')=>`<p class="note"${tipAttr(tip)}>${text}</p>`;
@@ -31,7 +47,8 @@ const month=new Intl.DateTimeFormat('en-GB',{month:'short',timeZone:'UTC'}),mont
 // Line chart drawn at the element's real pixel size, so labels never scale. spec: {series:[{color,name,points:[[x,y]]}],time,fmtX,fmtY,empty}
 export function chart(el){
   let spec=null;const height=()=>el.clientHeight||150;
-  el.addEventListener('pointermove',e=>hover(e.offsetX));el.addEventListener('pointerleave',()=>hover(null));
+  const at=e=>e.clientX-el.getBoundingClientRect().left;
+  el.addEventListener('pointermove',e=>hover(at(e)));el.addEventListener('pointerdown',e=>hover(at(e)));el.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')hover(null);});
   let scale=null;
   function draw(){
     if(!spec)return;const pts=spec.series.flatMap(s=>s.points);

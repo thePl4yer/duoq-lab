@@ -2,7 +2,7 @@ import {PLAYERS,MODES,aggregate,pairInfo,fromBallchasing,mergeReplays,validateSu
 import {trackerDefaultRanks,trackerResultSummary} from './tracker.js';
 import {fetchStore,identity,seal,publish} from './store.js';
 import {MatchCollector,SOCKET_URL} from './live.js';
-import {$,$$,esc,fmt,berlin,showContent,toast,row,line,note,countUp,chart} from './ui.js';
+import {$,$$,esc,fmt,berlin,showContent,toast,row,line,note,countUp,chart,tooltips} from './ui.js';
 const [KATE,PLAYER]=PLAYERS,COLOR={[KATE.id]:'var(--kate)',[PLAYER.id]:'var(--player)'};
 const day=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}),utcDay=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
 const minutes=s=>{if(!Number.isFinite(s))return '—';const value=Math.round(s);return `${Math.floor(value/60)}:${String(value%60).padStart(2,'0')}`;};
@@ -11,7 +11,8 @@ const dateLabel=r=>{if(!r.date)return 'No date';const d=new Date(r.date.replace(
 const span=(start,end)=>{const [a,b]=[start,end].map(d=>new Date(d+'T12:00:00Z')),m=new Intl.DateTimeFormat('en-GB',{month:'short',timeZone:'UTC'});return m.format(a)===m.format(b)?`${a.getUTCDate()}–${b.getUTCDate()} ${m.format(b)}`:`${a.getUTCDate()} ${m.format(a)} – ${b.getUTCDate()} ${m.format(b)}`;};
 const state={replays:[],ranks:{},season:'',coverage:{},tracker:null,results:null,history:null,view:'overall',scope:'all',mode:'all',tableMode:'all',period:'all',search:'',page:0,rankMode:'doubles',status:''};
 let current,stored=[],importing=false,aborted=false,activeWorker=null,db;
-const pageSize=10,rankChart=chart($('#rank-chart')),speedChart=chart($('#speed-chart'));
+const pageSize=10,rankChart=chart($('#rank-chart')),speedChart=chart($('#speed-chart')),icon=id=>`<svg class="ico"><use href="#i-${id}"/></svg>`;
+tooltips();
 async function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('duoq-lab',1);req.onupgradeneeded=()=>req.result.createObjectStore('workspace');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function dbRead(key){if(!db)return null;return new Promise((resolve,reject)=>{const req=db.transaction('workspace').objectStore('workspace').get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function dbWrite(key,value){if(!db)throw Error('Local storage is unavailable. Export your data before closing this page.');return new Promise((resolve,reject)=>{const tx=db.transaction('workspace','readwrite');tx.objectStore('workspace').put(value,key);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}
@@ -27,12 +28,12 @@ function render(){
     +row('Large pads stolen',steals(k).bigStolen,steals(p).bigStolen)+row('Small pads stolen',steals(k).smallStolen,steals(p).smallStolen)
     +row('Boost tax',steals(k).taxed,steals(p).taxed,{tip:'Same test against your teammate, counted only when the taker had more boost. Click for the list.',action:'tax'})
     +row('Collected / min',k.bpm,p.bpm,{tip:'Boost collected per minute of tracked play'})
-    +(k.stealGames||p.stealGames?note(`Steal analysis ${k.stealGames} / ${p.stealGames} matches`):note(`Stolen and tax need re-imported replays (0 of ${fmt(Math.max(k.games,p.games))})`,k.oldGames||p.oldGames?`Older rows only know pickups on the opponent's side: ${fmt(k.oldStolen)} / ${fmt(p.oldStolen)}.`:''));
+    +(k.stealGames||p.stealGames?note(`Steal analysis ${k.stealGames} / ${p.stealGames} matches`):note(`Stolen and tax: re-import replays to analyse them (0 of ${fmt(Math.max(k.games,p.games))})`,k.oldGames||p.oldGames?`Older rows only know pickups on the opponent's side: ${fmt(k.oldStolen)} / ${fmt(p.oldStolen)}.`:''));
   $('#score').innerHTML=[['Goals','goals'],['Assists','assists'],['Shots','shots'],['Saves','saves'],['Demos','demos']].map(([label,key])=>row(label,k.games?k[key]:null,p.games?p[key]:null,{tip:`Total ${label.toLowerCase()} in this view`})).join('')+row('Bumped the other',a.coverage?a.pairBumps[0]:null,a.coverage?a.pairBumps[1]:null,{action:'bumps',tip:`Estimated from car movement in ${a.coverage} replays; demos are separate. Click for the list. “That was a tactical bump.”`});
   $('#movement').innerHTML=row('Average speed',k.avgSpeed,p.avgSpeed,{unit:' uu/s',tip:'Weighted by tracked playtime. Top speed is 2,300 uu/s.'})+row('Supersonic',k.superPct,p.superPct,{unit:'%',digits:1,tip:'Share of tracked time at supersonic speed'})+row('In the air',k.airPct,p.airPct,{unit:'%',digits:1,tip:'Share of tracked time off the ground and off walls'});
   renderSpeed(a);
   const [hk,hp]=a.habits;
-  $('#habits').innerHTML=hk.games||hp.games?row('Whiffs / game',hk.whiffs,hp.whiffs,{digits:1})+row('Beaten to the ball / game',hk.beaten,hp.beaten,{digits:1})+row('50/50s won',hk.fiftyPct,hp.fiftyPct,{unit:'%',bar:false})+row('Kickoffs taken / game',hk.kickoffs,hp.kickoffs,{digits:1})+row('Passes / game',hk.passes,hp.passes,{digits:1,tip:'Passes to the other player'})+row('First man',hk.firstManPct,hp.firstManPct,{unit:'%',bar:false,tip:'Share of time as the player closest to the ball'})+(hk.dropshotGames||hp.dropshotGames?row('Dropshot damage / game',hk.dropshot,hp.dropshot,{tip:'Floor damage read from the replay network data'}):''):note('Appear once replays are analysed with v0.2');
+  $('#habits').innerHTML=hk.games||hp.games?row('Whiffs / game',hk.whiffs,hp.whiffs,{digits:1})+row('Beaten to the ball / game',hk.beaten,hp.beaten,{digits:1})+row('50/50s won',hk.fiftyPct,hp.fiftyPct,{unit:'%',bar:false})+row('Kickoffs taken / game',hk.kickoffs,hp.kickoffs,{digits:1})+row('Passes / game',hk.passes,hp.passes,{digits:1,tip:'Passes to the other player'})+row('First man',hk.firstManPct,hp.firstManPct,{unit:'%',bar:false,tip:'Share of time as the player closest to the ball'})+(hk.dropshotGames||hp.dropshotGames?row('Dropshot damage / game',hk.dropshot,hp.dropshot,{tip:'Floor damage read from the replay network data'}):''):note(`Re-import replays to analyse them (0 of ${fmt(Math.max(k.games,p.games))})`);
   renderTable();renderStatus();
 }
 const heroTiles=[['life','Lifetime wins'],['season','Season matches'],['games','Games'],['rate','Winrate']];
@@ -41,7 +42,7 @@ function renderHero(k,p){
   if(!box.children.length)box.innerHTML=heroTiles.map(([id,label])=>`<div class="stat" id="stat-${id}" tabindex="0"><small>${label}</small><div><b class="k"></b><i>/</i><b class="p"></b></div></div>`).join('');
   const t=state.tracker,season=id=>MODES.reduce((s,m)=>s+(t?.profiles[id].ranks[m.id]?.matches??0),0),view={together:'together',solo:'solo',overall:'all'}[state.view];
   const values={life:[t?.profiles[KATE.id].lifetime.wins,t?.profiles[PLAYER.id].lifetime.wins,0,'',`Account totals from Tracker, ${t?berlin.format(new Date(t.capturedAt)):'not loaded'}`],season:[t&&season(KATE.id),t&&season(PLAYER.id),0,'','This season, six ranked playlists, including games without a saved replay (Tracker)'],games:[k.games,p.games,0,'',`Captured matches, ${view} games: replays, the daily job and the live tab`],rate:[k.games?k.winRate:null,p.games?p.winRate:null,1,'%',`Wins per captured game, ${view} games. Draws count as games.`]};
-  for(const [id,[kv,pv,digits,unit,tip]] of Object.entries(values)){const el=$(`#stat-${id}`);el.dataset.tip=tip;for(const [cls,v] of [['k',kv],['p',pv]])countUp(el.querySelector(`.${cls}`),v??NaN,x=>fmt(x,digits)+(Number.isFinite(x)?unit:''));}
+  for(const [id,[kv,pv,digits,unit,tip]] of Object.entries(values)){const el=$(`#stat-${id}`);el.dataset.tip=tip;if(id==='games'||id==='rate')el.querySelector('small').textContent=`${id==='games'?'Games':'Winrate'} · ${state.view}`;for(const [cls,v] of [['k',kv],['p',pv]])countUp(el.querySelector(`.${cls}`),v??NaN,x=>fmt(x,digits)+(Number.isFinite(x)?unit:''));}
 }
 function renderResults(a){
   const [k,p]=a.players,wl=x=>x.games?`${x.wins}–${x.losses}${x.draws?`–${x.draws}`:''}`:null,first=r=>r.games?`${r.wins} of ${r.games} won`:'—';
@@ -80,7 +81,7 @@ function renderTable(){
     const info=pairInfo(r),own=info.pair[0]??info.pair[1],score=own?[r.score[own.team],r.score[1-own.team]]:r.score;
     const result=info.both&&!info.together?'VS':[0,1].includes(r.winnerTeam)?r.winnerTeam===own.team?'W':'L':score[0]>score[1]?'W':score[0]<score[1]?'L':'D';
     const who=info.together?'Together':info.both?'Against':own?.id===KATE.id?'Kate':'PLAYER';
-    return `<tr><td><span class="result ${result==='W'?'win':result==='L'?'loss':''}">${result}</span> ${score.join(':')}${r.source==='live'&&!r.capture?.finalSnapshot?' *':''}</td><td>${esc(modeName(r.mode))}<small>${who}${r.boostWarning?' · limited boost data':''}</small></td><td>${esc(dateLabel(r))}</td><td>${minutes(r.duration)}</td><td>${({live:'Live tab',epic:r.rule===2?'Epic replay':'Epic history',local:'Replay'})[r.source]??'Ballchasing'}</td><td><button class="icon replay-detail" data-id="${esc(r.id)}" aria-label="Details ${esc(dateLabel(r))}">↗</button></td></tr>`;
+    return `<tr><td><span class="result ${result==='W'?'win':result==='L'?'loss':''}">${result}</span> ${score.join(':')}${r.source==='live'&&!r.capture?.finalSnapshot?' *':''}</td><td>${esc(modeName(r.mode))}<small>${who}${r.boostWarning?' · limited boost data':''}</small></td><td>${esc(dateLabel(r))}</td><td>${minutes(r.duration)}</td><td>${({live:'Live tab',epic:r.rule===2?'Epic replay':'Epic history',local:'Replay'})[r.source]??'Ballchasing'}</td><td><button class="icon replay-detail" data-id="${esc(r.id)}" aria-label="Details ${esc(dateLabel(r))}">${icon('out')}</button></td></tr>`;
   }).join('')||'<tr><td colspan="6" class="empty">No matches for these filters.</td></tr>';
   $('#table-summary').textContent=rows.length?`${state.page*pageSize+1}–${Math.min((state.page+1)*pageSize,rows.length)} of ${rows.length}`:'';
   $('#page-number').textContent=`${state.page+1}/${pages}`;$('#prev-page').disabled=state.page===0;$('#next-page').disabled=state.page+1>=pages;
@@ -199,6 +200,7 @@ $('#rank-rows').onclick=e=>{const b=e.target.closest('[data-mode]');if(b){state.
 $('#boost').onclick=e=>{if(e.target.closest('[data-action="tax"]'))showTax();};
 $('#score').onclick=e=>{if(!e.target.closest('[data-action="bumps"]'))return;const events=current.shared.filter(r=>r.bumpAvailable&&pairInfo(r).both).flatMap(r=>r.bumps.map(e=>({...e,date:dateLabel(r)})));showContent('Bumps',`<p>${events.length} estimated bumps between you in this view. Estimated from car movement; may miss or misassign bumps.</p>${bumpList(events)}`);};
 $('#about-button').onclick=showAbout;
+document.addEventListener('keydown',e=>{const el=e.target.closest?.('[data-action]');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();el.click();}});
 $('#cookie').onclick=()=>toast('Kate took the boost. You get a cookie. Fair trade? 🍪');
 $('#settings').addEventListener('toggle',e=>{if(e.target.open){fillRankForm();showKey();}});
 $('#copy-key').onclick=()=>navigator.clipboard.writeText($('#share-key').textContent).then(()=>toast('Key copied. Send it to the repository owner.'));

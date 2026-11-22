@@ -1,6 +1,24 @@
 <!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0c1119"><meta name="description" content="Kate and P L 4 Y E R: Rocket League duo statistics, replay analysis, boost, bumps and ranks."><title>DuoQ Lab · Kate × P L 4 Y E R</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wdth,wght@0,75..100,400..700;1,75,700..800&display=swap"><link rel="stylesheet" href="./src/style.css"></head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+ <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0zM17 5h3a3 3 0 0 1-3 4M7 5H4a3 3 0 0 0 3 4"/></symbol>
+ <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+ <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+ <symbol id="i-bars" viewBox="0 0 24 24"><path d="M5 20V11M11 20V5M17 20v-7M3 20h18"/></symbol>
+ <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8M15 7h6v6"/></symbol>
+ <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></symbol>
+ <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+ <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+ <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+ <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></symbol>
+ <symbol id="i-out" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+ <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+ <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+ <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+ <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+</svg>
 <div class="art" aria-hidden="true"></div>
 <header class="hero">
  <div class="hero-top">
@@ -8,9 +26,9 @@
   <h1 tabindex="0" data-tip="Two players. Every questionable decision, on record.">Your duo. <span>Unfiltered.</span></h1>
   <div class="legend"><span class="k">Kate</span><span class="p">P L 4 Y E R</span></div>
   <div class="tools">
-   <button class="tool" id="upload-button" data-tip="Add .replay files or a JSON backup. You can also drop files anywhere on the page."><i>＋</i><span>Replays</span></button>
-   <button class="tool" id="folder-button" data-tip="Import new replays from your replay folder. Chrome remembers the folder."><i>⌑</i><span>Folder</span></button>
-   <button class="tool live" id="live-button" data-tip="Capture matches from Rocket League on this PC. Setup: Data & settings."><i>●</i><span>Connect game</span></button>
+   <button class="tool" id="upload-button" data-tip="Add .replay files or a JSON backup. You can also drop files anywhere on the page."><svg class="ico"><use href="#i-plus"/></svg><span>Replays</span></button>
+   <button class="tool" id="folder-button" data-tip="Import new replays from your replay folder. Chrome remembers the folder."><svg class="ico"><use href="#i-folder"/></svg><span>Folder</span></button>
+   <button class="tool live" id="live-button" data-tip="Capture matches from Rocket League on this PC. Setup: Data & settings."><i class="dot"></i><span>Connect game</span></button>
   </div>
  </div>
  <div class="hero-stats" id="hero-stats"></div>
@@ -25,30 +43,30 @@
 </nav>
 <div class="import-progress" id="import-progress" hidden><span id="progress-label"></span><progress id="progress-bar" value="0" max="100"></progress><small id="progress-detail"></small><button class="link" id="cancel-import">Cancel</button></div>
 <main class="grid">
- <section class="card" id="results-card"><h2><i>▤</i>Results</h2><div id="results"></div></section>
- <section class="card ranks" id="ranks-card"><h2><i>♜</i>Ranks<small id="rank-note"></small></h2><div id="rank-rows"></div><div class="chart" id="rank-chart"></div></section>
- <section class="card" id="habits-card"><h2><i tabindex="0" data-tip="Counted by the replay parser. Under about 30 games these are anecdotes, not coaching.">◎</i>Habits</h2><div id="habits"></div></section>
- <section class="card" id="boost-card"><h2><i>ϟ</i>Boost</h2><div id="boost"></div></section>
- <section class="card" id="score-card"><h2><i>Σ</i>Scoreboard</h2><div id="score"></div></section>
- <section class="card full" id="movement-card"><h2><i>↗</i>Movement<small id="chart-count"></small></h2><div class="split-body"><div id="movement"></div><div class="chart" id="speed-chart"></div></div></section>
+ <section class="card" id="results-card"><h2><svg class="ico"><use href="#i-list"/></svg>Results</h2><div id="results"></div></section>
+ <section class="card ranks" id="ranks-card"><h2><svg class="ico"><use href="#i-trophy"/></svg>Ranks<small id="rank-note"></small></h2><div id="rank-rows"></div><div class="chart" id="rank-chart"></div></section>
+ <section class="card" id="habits-card"><h2 tabindex="0" data-tip="Counted by the replay parser. Under about 30 games these are anecdotes, not coaching."><svg class="ico"><use href="#i-target"/></svg>Habits</h2><div id="habits"></div></section>
+ <section class="card" id="boost-card"><h2><svg class="ico"><use href="#i-bolt"/></svg>Boost</h2><div id="boost"></div></section>
+ <section class="card" id="score-card"><h2><svg class="ico"><use href="#i-bars"/></svg>Scoreboard</h2><div id="score"></div></section>
+ <section class="card full" id="movement-card"><h2><svg class="ico"><use href="#i-trend"/></svg>Movement<small id="chart-count"></small></h2><div class="split-body"><div id="movement"></div><div class="chart" id="speed-chart"></div></div></section>
 </main>
-<details class="drawer" id="matches"><summary><i>▷</i>Matches <b id="replay-count">0</b></summary>
+<details class="drawer" id="matches"><summary><svg class="ico"><use href="#i-history"/></svg>Matches <b id="replay-count">0</b><svg class="ico chev"><use href="#i-chev"/></svg></summary>
  <div class="table-tools"><div class="seg" role="tablist" aria-label="Match filter"><button data-scope="together" role="tab">Together</button><button data-scope="solo" role="tab">Solo</button><button data-scope="against" role="tab">Against</button><button data-scope="all" role="tab">All</button></div><input id="replay-search" type="search" placeholder="Search …" aria-label="Search matches"><select id="mode-filter" aria-label="Game mode"><option value="all">All modes</option><option value="doubles">2v2</option><option value="standard">3v3</option><option value="hoops">Hoops</option><option value="dropshot">Dropshot</option><option value="snowday">Snow Day</option><option value="rumble">Rumble</option><option value="other">Other</option></select></div>
  <table><thead><tr><th>Result</th><th>Mode</th><th>Date</th><th>Length</th><th>Source</th><th></th></tr></thead><tbody id="replay-rows"></tbody></table>
- <div class="pager"><span id="table-summary"></span><button class="icon" id="prev-page" aria-label="Previous page">←</button><span id="page-number"></span><button class="icon" id="next-page" aria-label="Next page">→</button></div>
+ <div class="pager"><span id="table-summary"></span><button class="icon" id="prev-page" aria-label="Previous page"><svg class="ico"><use href="#i-left"/></svg></button><span id="page-number"></span><button class="icon" id="next-page" aria-label="Next page"><svg class="ico"><use href="#i-right"/></svg></button></div>
 </details>
-<details class="drawer" id="settings"><summary><i>⚙</i>Data & settings</summary>
+<details class="drawer" id="settings"><summary><svg class="ico"><use href="#i-sliders"/></svg>Data & settings<svg class="ico chev"><use href="#i-chev"/></svg></summary>
  <div class="settings">
   <section><h3>Live capture</h3><p>Close Rocket League, set in <code>TAGame\Config\TAStatsAPI.ini</code>:</p><pre>[TAGame.MatchStatsExporter_TA]
 PacketSendRate=10
-WebPort=49124</pre><p>Start the game, press <b>Connect game</b> at the top and allow local network access once. Online matches only. <a href="./probe.html" target="_blank" rel="noreferrer">Connection test ↗</a></p></section>
-  <section><h3>Sharing</h3><label><input type="checkbox" id="share-publicly" checked> Share results (signed, day only)</label><label><input type="checkbox" id="duo-only" checked> Only matches with both of us</label><p class="key">Key <code id="share-key">…</code> <button class="link" id="copy-key">Copy</button> <span id="key-status"></span></p><div class="buttons"><button class="button" id="backup-button">↓ Export backup</button><button class="button" id="import-json-button">↑ Import backup</button><button class="button danger" id="reset-button">Reset</button></div></section>
+WebPort=49124</pre><p>Start the game, press <b>Connect game</b> at the top and allow local network access once. Online matches only. <a href="./probe.html" target="_blank" rel="noreferrer">Connection test</a></p></section>
+  <section><h3>Sharing</h3><label><input type="checkbox" id="share-publicly" checked> Share results (signed, day only)</label><label><input type="checkbox" id="duo-only" checked> Only matches with both of us</label><p class="key">Key <code id="share-key">…</code> <button class="link" id="copy-key">Copy</button> <span id="key-status"></span></p><div class="buttons"><button class="button" id="backup-button">Export backup</button><button class="button" id="import-json-button">Import backup</button><button class="button danger" id="reset-button">Reset</button></div></section>
   <section><h3>Ranks</h3><p>From Tracker and match history. Override per mode:</p><form id="rank-form"><input id="rank-season" placeholder="Season" maxlength="60" aria-label="Season"><div id="rank-fields"></div><button class="button" type="submit">Save ranks</button></form><details><summary>Import Tracker JSON</summary><select id="tracker-player" aria-label="Profile"><option value="76561198058377116">Kate</option><option value="76561198060138310">P L 4 Y E R</option></select><textarea id="tracker-json" rows="3" placeholder='{"data":{"platformInfo":…,"segments":[…]}}' aria-label="Tracker JSON"></textarea><button class="button" id="tracker-import">Import</button></details></section>
  </div>
 </details>
-<footer><span>duoq<b>lab</b> v0.3</span><button class="link" id="about-button">ⓘ About the data</button><button class="link" id="cookie" data-tip="Cookie break">🍪</button><span>Fan project · Rocket League® belongs to its owners</span></footer>
+<footer><span>duoq<b>lab</b> v0.3</span><button class="link" id="about-button"><svg class="ico"><use href="#i-info"/></svg>About the data</button><button class="link" id="cookie" data-tip="Cookie break">🍪</button><span>Fan project · Rocket League® belongs to its owners</span></footer>
 <input type="file" id="replay-files" accept=".replay,.json" multiple hidden><input type="file" id="folder-files" webkitdirectory multiple hidden>
-<dialog id="detail-dialog"><div class="dialog-head"><h2 id="detail-title"></h2><button class="icon close-dialog" aria-label="Close">×</button></div><div class="dialog-body" id="detail-body"></div></dialog>
+<dialog id="detail-dialog"><div class="dialog-head"><h2 id="detail-title"></h2><button class="icon close-dialog" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button></div><div class="dialog-body" id="detail-body"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./src/app.js"></script>
 </body></html>
