@@ -8,15 +8,15 @@
   --r:6px;--r-s:4px;--gap:12px;--pad:20px;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:500 var(--fs-s)/1.45 var(--font);font-stretch:87.5%;font-variant-numeric:tabular-nums}
+body{position:relative;isolation:isolate;margin:0;background:var(--bg);color:var(--text);font:500 var(--fs-s)/1.45 var(--font);font-stretch:87.5%;font-variant-numeric:tabular-nums}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--accent)}
 :where(button,input,textarea,select,a,summary,[tabindex]):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .k{color:var(--kate)!important}.p{color:var(--player)!important}
 [hidden]{display:none!important}
 
-.top{position:relative;isolation:isolate;border-bottom:1px solid var(--line)}
-.art{position:absolute;z-index:-1;top:0;right:0;width:min(747px,calc(100% - 680px));aspect-ratio:3/1;background:url(../assets/duo-hero.webp) center/contain no-repeat;-webkit-mask-image:linear-gradient(90deg,transparent,#000 30%);mask-image:linear-gradient(90deg,transparent,#000 30%)}
+.art{position:absolute;z-index:-1;top:0;left:0;width:100%;aspect-ratio:3/1;background:url(../assets/duo-hero.webp) center top/100% auto no-repeat;-webkit-mask-image:linear-gradient(180deg,#000 84%,transparent);mask-image:linear-gradient(180deg,#000 84%,transparent)}
+.art::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,#0c1119d0 0,#0c111980 30%,#0c111900 58%)}
 .hero{min-height:200px;padding:14px var(--pad) 18px;display:flex;flex-direction:column;justify-content:space-between;gap:16px}
 .hero-top{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap}
 .brand,h1,.stat div,.card h2,.drawer>summary,.dialog-head h2{font-weight:800;font-style:italic;font-stretch:75%}
@@ -36,6 +36,7 @@ h1 span{color:var(--soft)}
 .stat small{display:block;font-size:var(--fs-xs);letter-spacing:1.2px;text-transform:uppercase;color:var(--soft)}
 .stat div{display:flex;align-items:baseline;gap:8px;font-size:clamp(30px,3.4vw,46px);line-height:1.05;text-shadow:0 2px 14px #0c1119} /* unslop-ignore: legibility over the artwork, not a glow */
 .stat i{font-style:normal;font-size:.55em;color:var(--muted)}
+.hero-top,.stat small,.filters .status{text-shadow:0 1px 8px #0c1119} /* unslop-ignore: legibility over the artwork, not a glow */
 
 .filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px var(--pad)}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden}
@@ -48,7 +49,7 @@ select,input,textarea{background:var(--card);border:1px solid var(--line);border
 .import-progress small{width:100%;color:var(--muted)}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));grid-auto-flow:dense;gap:var(--gap);padding:var(--gap) var(--pad)}
-.card{min-width:0;padding:10px 12px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);container-type:inline-size}
+.card{min-width:0;padding:10px 12px 12px;background:#131a25a6;border:1px solid var(--line);border-radius:var(--r);container-type:inline-size}
 .card.ranks{grid-column:span 2;grid-row:span 2}
 .card.full{grid-column:1/-1}
 .card.ranks{display:flex;flex-direction:column}
@@ -154,10 +155,7 @@ dialog::backdrop{background:#05080dcc}
 .toast.error{border-color:var(--loss);color:var(--loss)}
 body.dragging::after{content:'Drop replays to import';position:fixed;inset:12px;z-index:50;display:grid;place-items:center;border:2px dashed var(--accent);border-radius:var(--r);background:#0c1119d9;font-size:var(--fs-xl);font-weight:800;font-style:italic;font-stretch:75%;pointer-events:none}
 
-@media(max-width:1100px){
-  .art{position:relative;display:block;width:100%;-webkit-mask-image:linear-gradient(0deg,transparent,#000 22%);mask-image:linear-gradient(0deg,transparent,#000 22%)}
-  .hero{min-height:0;padding-top:4px}
-}
+@media(max-width:1100px){.tools{width:100%;margin-left:0}}
 @media(max-width:740px){
   :root{--pad:12px;--gap:10px}
   .art{background-image:url(../assets/duo-hero-phone.webp)}
