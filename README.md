@@ -8,9 +8,9 @@ Rocket League dashboard for **Kate** and **P L 4 Y E R**: replay stats, boost st
 
 | Source | Gives | You do |
 | --- | --- | --- |
-| Replay files | everything | **Folder** once; with Chrome's "Allow on every visit", new saved replays import whenever the page opens |
-| Daily job | last 20 matches of PLAYER's account, analysed from Rocket League's own replays | one-time setup below |
-| Live tab | result, goals, own-team speed and boost | keep the dashboard open while playing |
+| Daily job | last 20 matches of PLAYER's account, analysed from Rocket League's own replays; nothing to save | one-time setup below |
+| Live tab | result, goals, own-team speed and boost of the match being played | keep the dashboard open while playing |
+| Replay files | everything | optional: drop `.replay` files on the page |
 
 Everything shared is stored in `matches.json` on the [`data` branch](https://github.com/thePl4yer/duoq-lab/tree/data); the site reads it from there. Shared rows contain only the two players and the **day**, never the time.
 
@@ -22,15 +22,16 @@ Everything shared is stored in `matches.json` on the [`data` branch](https://git
 
 What it then does:
 
-- Every 4 hours it renews both logins. This talks to Epic's login service only, never to the game.
-- Around 06:00 Berlin time it asks Steam and (through the scout account) Rocket League whether PLAYER is online. If either says yes, or cannot answer, it does nothing until the next night. Otherwise it reads the last 20 matches, analyses the replays and commits the results.
-- Rocket League keeps only the last 20 matches. On a longer day the earlier ones are covered by the live tab or saved replays.
+- Every 2 hours it renews both logins. This talks to Epic's login service only, never to the game.
+- Around 06:00 Berlin time the scout account first tries to read PLAYER's last 20 matches itself, which never touches his account. If the game does not allow that, it checks Steam and Rocket League whether PLAYER is online. If either says yes, or cannot answer, it does nothing until the next night. Otherwise it reads the last 20 matches with his login, analyses the replays and commits the results.
+- **Now instead of tonight:** Actions → Collect matches → Run workflow (the dashboard's history button opens it). Tick `in_game` only if you accept that Rocket League disconnects PLAYER when he is in a match.
+- Rocket League keeps only the last 20 matches. On a longer day the earlier ones are covered by the live tab.
 
 Good to know:
 
 - **Before setup** the job still runs and publishes the `data` branch from the existing matches. Only the match history part is off.
 - **Remove it any time:** delete the `LOGIN_KEY` secret (the stored logins become unreadable). To be thorough, also use *sign out everywhere* in your Epic account.
-- **Red ✗ on a run** means a login expired or `LOGIN_KEY` was changed: repeat step 2 or 3.
+- **Red ✗ on a run** means a login expired or `LOGIN_KEY` was changed: repeat step 2 or 3. If the log says *Epic unreachable*, the logins were kept and the next run retries.
 - Logs print counts only. The login link in the log is useless without your Epic password.
 - The logins are stored encrypted on the `data` branch. The match history comes from an unofficial interface of the game; a game update can break it until [rlapi](https://github.com/dank/rlapi) catches up.
 - Recommended: **Settings → Rules** on `main`, require a pull request with code-owner review. `.github/CODEOWNERS` already lists the files that can reach the secret.
@@ -38,6 +39,8 @@ Good to know:
 ## Live tab and sharing
 
 Setup steps are on the dashboard under **Data & settings**. Sharing from a browser needs its key approved: copy the key shown there into `data/keys.json` as `{"<key>": "<name>"}`.
+
+Connection problems: **Data & settings → Copy debug log**, or open Chrome's console (F12) and filter for `[duoq]`. It lists each connection step, every message the page ignored and why, and every caught error.
 
 What each number means: hover it on the dashboard.
 

@@ -4,6 +4,14 @@ export const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const numbers={};
 export const fmt=(v,d=0)=>v===null||v===undefined||!Number.isFinite(v)?'—':(numbers[d]??=new Intl.NumberFormat('en-GB',{maximumFractionDigits:d,minimumFractionDigits:d})).format(v);
 export const berlin=new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeZone:'Europe/Berlin'});
+// Every caught error and live-connection step: printed to the console as [duoq] and kept for "Copy debug log".
+const trail=[];
+export function debug(scope,...args){
+  const text=args.map(a=>a instanceof Error?`${a.name}: ${a.message}`:a&&typeof a==='object'?JSON.stringify(a)?.slice(0,300):String(a)).join(' ');
+  trail.push(`${new Date().toISOString().slice(11,19)} ${scope} ${text}`);if(trail.length>300)trail.shift();
+  (args.some(a=>a instanceof Error)?console.warn:console.info)('[duoq]',scope,...args);
+}
+export const debugTrail=()=>trail.join('\n');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function showContent(title,html){$('#detail-title').textContent=title;$('#detail-body').innerHTML=html;$('#detail-dialog').showModal();}
 export function toast(message,error=false){const el=$('#toast');el.textContent=message;el.className=`toast show${error?' error':''}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),error?11000:6500);}
