@@ -4,19 +4,23 @@
 <p>Checks whether this browser can read Rocket League’s local Stats API at <code>ws://127.0.0.1:49124</code>. Read-only; nothing is sent to the game or anywhere else. Works from a downloaded file too.</p>
 <ol><li>Close Rocket League. In <code>TAGame\Config\TAStatsAPI.ini</code> (or <code>DefaultStatsAPI.ini</code>) set, under <code>[TAGame.MatchStatsExporter_TA]</code>: <code>PacketSendRate=10</code>, <code>WebPort=49124</code>.</li><li>Start Rocket League, then press Connect. On the hosted site Chrome asks once for local network access: choose Allow.</li><li>Play or watch a match and look at the table.</li></ol>
 <p><button id="go">Connect</button> <button id="copy">Copy report</button> <b id="state">Not connected.</b></p>
-<h3>Events seen</h3><table id="events"><tr><td>none yet</td></tr></table>
+<h3>Events seen</h3><table id="events"><tr><td>none yet</td></tr></table><p id="match"></p>
 <h3>Player fields in the last update</h3><p>Names and ids are replaced by team and slot. “own team” fields (Speed, Boost …) should be filled for your side only.</p><table id="fields"></table>
 <h3>Last update, raw</h3><pre id="raw">–</pre>
 <script>
-const $=id=>document.getElementById(id),counts={},report={events:counts,guid:false,players:[],playlist:null};let socket;
+const h=v=>String(v).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),$=id=>document.getElementById(id),counts={},report={events:counts,guid:false,players:[],playlist:null};let socket;
 const anonymous=p=>Object.fromEntries(Object.entries(p).map(([k,v])=>[k,k==='Name'?'(hidden)':k==='PrimaryId'?String(v).replace(/\|[^|]+\|/,'|(hidden)|'):v]));
 function show(message){
+  if(typeof message.Data==='string')try{message.Data=JSON.parse(message.Data);}catch{return;}
+  if(!message.Data||typeof message.Data!=='object')return;
   counts[message.Event]=(counts[message.Event]||0)+1;
-  $('events').innerHTML=Object.entries(counts).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  $('events').innerHTML=Object.entries(counts).map(([k,v])=>`<tr><td>${h(k)}</td><td>${h(v)}</td></tr>`).join('');
   if(message.Event!=='UpdateState')return;
-  const d=message.Data,players=(d.Players||[]).map(anonymous),keys=[...new Set(players.flatMap(Object.keys))].filter(k=>!['Name','PrimaryId','Shortcut','Attacker'].includes(k));
+  const d=message.Data;
+  $('match').innerHTML=`Match ID: ${d.MatchGuid?'<span class="ok">present</span>':'<span class="no">empty</span> (private or offline match; the dashboard records online matches only)'} · Playlist: ${d.Game?.PlaylistId!=null?h(d.Game.PlaylistId):'<span class="no">not sent</span>'}`;
+  const players=(d.Players||[]).map(anonymous),keys=[...new Set(players.flatMap(Object.keys))].filter(k=>!['Name','PrimaryId','Shortcut','Attacker'].includes(k));
   report.guid=!!d.MatchGuid;report.playlist=d.Game?.PlaylistId??null;report.players=players.map(p=>({team:p.TeamNum,platform:String(p.PrimaryId).split('|')[0],present:keys.filter(k=>p[k]!==undefined)}));
-  $('fields').innerHTML='<tr><th>team</th>'+keys.map(k=>`<th>${k}</th>`).join('')+'</tr>'+players.map(p=>`<tr><td>${p.TeamNum}</td>`+keys.map(k=>p[k]===undefined?'<td class="no">–</td>':`<td class="ok">${p[k]}</td>`).join('')+'</tr>').join('');
+  $('fields').innerHTML='<tr><th>team</th>'+keys.map(k=>`<th>${h(k)}</th>`).join('')+'</tr>'+players.map(p=>`<tr><td>${h(p.TeamNum)}</td>`+keys.map(k=>p[k]===undefined?'<td class="no">–</td>':`<td class="ok">${h(typeof p[k]==='object'?JSON.stringify(p[k]):p[k])}</td>`).join('')+'</tr>').join('');
   $('raw').textContent=JSON.stringify({...d,Players:players},null,1);
 }
 $('go').onclick=()=>{
