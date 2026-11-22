@@ -8,7 +8,7 @@ const UNKNOWN=['boostStolen','bigStolen','smallStolen'],SCORE={goals:'Goals',ass
 const validGuid=id=>typeof id==='string'&&/^([a-f\d]{32}|[a-f\d]{64}|[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12})$/i.test(id);
 const number=(value,max=1e6)=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=max;
 const counter=value=>number(value)&&Number.isInteger(value)?value:null;
-const mode=playlist=>({1:'duels',10:'duels',2:'doubles',11:'doubles',3:'standard',13:'standard',27:'hoops',28:'rumble',29:'dropshot',30:'snowday'}[playlist]??'other');
+const mode=playlist=>({1:'duels',10:'duels',2:'doubles',11:'doubles',3:'standard',13:'standard',17:'hoops',27:'hoops',18:'rumble',28:'rumble',23:'dropshot',29:'dropshot',15:'snowday',30:'snowday'}[playlist]??'other');
 
 // Every outgoing record passes through this projection: no raw packet, other player, loadout or stray property survives.
 export function projectSummary(input){

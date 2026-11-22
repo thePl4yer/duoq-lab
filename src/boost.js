@@ -52,8 +52,9 @@ export function analyseBoost(replay,ids,rules=RULES){
     if(!victim)continue;
     const amount=Math.min(rule.value,victim.need);
     if(team.get(victim.id)!==team.get(taker)){mine.steals++;mine.stolen+=amount;mine[pad.size==='Big'?'big':'small']++;}
-    else if(players[victim.id]){const before=state(taker,i-1)??state(taker,i);if(before&&before.boost>victim.boost){mine.taxCount++;mine.taxed+=amount;if(mine.taxEvents.length<200)mine.taxEvents.push({time:e.time,pad:pad.size,amount,takerBoost:before.boost,theirBoost:victim.boost,how:victim.how});}}
+    else if(players[victim.id]){const before=state(taker,i-1)??state(taker,i);if(before&&before.boost>victim.boost){mine.taxCount++;mine.taxed+=amount;if(mine.taxEvents.length<200)mine.taxEvents.push({time:+e.time.toFixed(2),pad:pad.size,amount:Math.round(amount),takerBoost:Math.round(before.boost),theirBoost:Math.round(victim.boost),how:victim.how});}}
   }
+  for(const p of Object.values(players)){p.stolen=Math.round(p.stolen);p.taxed=Math.round(p.taxed);}
   result.status=unknown?(evaluated?'partial':'unavailable'):'complete';result.reason=unknown?'some_pickups_unresolved':null;
   return result;
 }
