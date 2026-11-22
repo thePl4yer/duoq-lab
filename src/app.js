@@ -172,19 +172,21 @@ $('#folder-button').onclick=async()=>{
 };
 let liveSocket=null;
 function live(on){
-  const status=$('#live-status'),button=$('#live-button');localStorage.setItem('duoq.live',on?'1':'0');
-  if(!on){liveSocket?.close();liveSocket=null;button.textContent='Connect to Rocket League';status.textContent='Not connected.';return;}
-  const collector=new MatchCollector({onNotice:m=>status.textContent=m,onSummary:row=>{status.textContent=`Captured a match (${row.score.join(' : ')}).`;addRows([row]);}});
+  const status=$('#live-status'),top=$('#live-top'),say=text=>{status.textContent=text;top.title=text;};
+  localStorage.setItem('duoq.live',on?'1':'0');
+  $('#live-button').textContent=on?'Stop capture':'Connect to Rocket League';top.classList.toggle('on',on);top.querySelector('span').textContent=on?'Live':'Connect game';
+  if(!on){liveSocket?.close();liveSocket=null;say('Not connected.');return;}
+  const collector=new MatchCollector({onNotice:say,onSummary:row=>{say(`Captured a match (${row.score.join(' : ')}).`);addRows([row]);}});
   const connect=()=>{
     if(localStorage.getItem('duoq.live')!=='1')return;
     const socket=liveSocket=new WebSocket(SOCKET_URL);let opened=false;
-    socket.onopen=()=>{opened=true;status.textContent='Connected. Waiting for a match to finish.';};
+    socket.onopen=()=>{opened=true;say('Connected. Waiting for a match to finish.');};
     socket.onmessage=e=>{if(typeof e.data==='string'&&e.data.length<1048576)try{collector.accept(JSON.parse(e.data));}catch{}};
-    socket.onclose=()=>{collector.disconnect();if(liveSocket!==socket)return;status.textContent=opened?'Rocket League closed. Waiting for it to start again.':'Rocket League not found. Allow local network access for this site, enable the Stats API (PacketSendRate=10, WebPort=49124) and start the game.';setTimeout(connect,5000);};
+    socket.onclose=()=>{collector.disconnect();if(liveSocket!==socket)return;say(opened?'Rocket League closed. Waiting for it to start again.':'Rocket League not found. Allow local network access for this site, enable the Stats API (PacketSendRate=10, WebPort=49124) and start the game.');setTimeout(connect,5000);};
   };
-  button.textContent='Stop capture';connect();
+  connect();
 }
-$('#live-button').onclick=()=>live(localStorage.getItem('duoq.live')!=='1');
+$('#live-button').onclick=$('#live-top').onclick=()=>live(localStorage.getItem('duoq.live')!=='1');
 $('#copy-key').onclick=()=>navigator.clipboard.writeText($('#share-key').textContent).then(()=>toast('Key copied. Send it to the repository owner.'));$('#replay-files').onchange=e=>importFiles(e.target.files);$('#folder-files').onchange=e=>importFiles(e.target.files);
 $('#cancel-import').onclick=()=>{aborted=true;parseFile.cancel?.();};
 const drop=$('#drop-zone');drop.onclick=()=>$('#replay-files').click();drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#replay-files').click();}};drop.ondragover=e=>{e.preventDefault();drop.classList.add('dragover');};drop.ondragleave=()=>drop.classList.remove('dragover');drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragover');importFiles(e.dataTransfer.files);};

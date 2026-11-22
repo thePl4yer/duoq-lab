@@ -45,7 +45,7 @@ PacketSendRate=10
 WebPort=49124
 ```
 
-Then **Data & settings → Connect to Rocket League** and allow local network access once. It only sees the match being played, so open it before you queue. [Connection test page](https://thepl4yer.github.io/duoq-lab/probe.html).
+Then, on the PC that runs the game, press **● Connect game** at the top of the dashboard and pick **Allow** when Chrome asks about local network access. Chrome remembers it; the tab reconnects by itself. It only sees the match being played, so open it before you queue. [Connection test page](https://thepl4yer.github.io/duoq-lab/probe.html).
 
 Sharing from a browser needs its key approved: copy **Your key** from Data & settings into `data/keys.json` as `{"<key>": "<name>"}`.
 
