@@ -51,6 +51,17 @@ test('Own-team speed and boost are integrated over time; kickoff and respawn res
   assert.equal(p.tracked,null);assert.equal(k.boostStolen,null);
   assert.ok(Math.abs(aggregate([validateSummary(out[0])],"overall").players[0].avgSpeed-1000)<1e-6);
 });
+test('Game builds that send Data as a JSON string are read; a missing playlist is stored as other; private matches give one notice',()=>{
+  const out=[],notices=[],c=new MatchCollector({onSummary:r=>out.push(r),onNotice:n=>notices.push(n),settleMs:60000});
+  const wire=m=>({Event:m.Event,Data:JSON.stringify(m.Data)}),noPlaylist=state();delete noPlaylist.Data.Game.PlaylistId;
+  c.accept(wire({Event:'MatchInitialized',Data:{MatchGuid:guid}}));c.accept(wire(noPlaylist));c.accept(wire(ended));c.finish(guid);
+  assert.equal(out.length,1);assert.equal(out[0].mode,'other');assert.equal(out[0].playlist,null);assert.equal(out[0].capture.rosterComplete,true);validateSummary(out[0]);
+  c.accept({Event:'UpdateState',Data:'{not json'});
+  const local=state();local.Data.MatchGuid='';for(let i=0;i<3;i++)c.accept(wire(local));
+  assert.equal(notices.filter(n=>/Private or offline/.test(n)).length,1);
+  c.accept(wire({Event:'MatchDestroyed',Data:{MatchGuid:''}}));c.accept(wire(local));
+  assert.equal(notices.filter(n=>/Private or offline/.test(n)).length,2);assert.equal(out.length,1);c.close();
+});
 test('A later replay upgrades the same live match instead of adding a game',()=>{
   const out=[],c=new MatchCollector({onSummary:r=>out.push(r),settleMs:60000});c.accept(state());c.accept(ended);c.accept(state());c.finish(guid);c.close();
   const replay={...out[0],source:'local',bumpAvailable:true,duration:300,rule:2,winnerTeam:undefined};

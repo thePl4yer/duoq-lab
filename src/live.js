@@ -21,10 +21,10 @@ export function projectSummary(input){
   });
   if(new Set(players.map(p=>p.id)).size!==players.length)throw Error('Duplicate live player.');
   if(!/^\d{4}-\d\d-\d\d$/.test(input.date??''))throw Error('Invalid live capture day.');
-  const playlist=Number(input.playlist);
-  if(!Number.isInteger(playlist)||playlist<1||playlist>1000)throw Error('Invalid live playlist.');
+  const playlist=input.playlist==null?null:Number(input.playlist);
+  if(playlist!==null&&(!Number.isInteger(playlist)||playlist<1||playlist>1000))throw Error('Invalid live playlist.');
   const complete=input.capture?.rosterComplete===true;
-  return {schema:1,id:input.id.toUpperCase(),title:'Live match',date:input.date,dateTimezone:'day',mode:mode(playlist),playlist:String(playlist),duration:null,score:input.score.slice(),winnerTeam:input.winnerTeam,players,bumps:[],bumpAvailable:false,source:'live',sourceUrl:null,parser:'rocket-league-stats-api/2',capture:{rosterComplete:complete,startedMidMatch:!complete,finalSnapshot:input.capture?.finalSnapshot===true}};
+  return {schema:1,id:input.id.toUpperCase(),title:'Live match',date:input.date,dateTimezone:'day',mode:mode(playlist),playlist:playlist===null?null:String(playlist),duration:null,score:input.score.slice(),winnerTeam:input.winnerTeam,players,bumps:[],bumpAvailable:false,source:'live',sourceUrl:null,parser:'rocket-league-stats-api/2',capture:{rosterComplete:complete,startedMidMatch:!complete,finalSnapshot:input.capture?.finalSnapshot===true}};
 }
 export function validateAliases(aliases={}){
   if(!aliases||typeof aliases!=='object'||Array.isArray(aliases))throw Error('aliases must map public platform IDs to a target Steam ID.');
@@ -33,7 +33,7 @@ export function validateAliases(aliases={}){
 }
 export class MatchCollector{
   constructor({onSummary,onNotice=()=>{},aliases={},settleMs=2500,now=()=>Date.now()}={}){
-    Object.assign(this,{onSummary,onNotice,settleMs,now,aliases:validateAliases(aliases),matches:new Map(),finished:new Set(),replays:new Set()});
+    Object.assign(this,{onSummary,onNotice,settleMs,now,aliases:validateAliases(aliases),matches:new Map(),finished:new Set(),replays:new Set(),unnamed:false});
   }
   identity(value){
     if(typeof value!=='string')return null;
@@ -41,9 +41,20 @@ export class MatchCollector{
     return steam&&Object.hasOwn(TARGETS,steam)?steam:this.aliases.get(value.toLowerCase())??null;
   }
   accept(message){
-    if(!message||typeof message!=='object'||!message.Data||typeof message.Data!=='object')return;
-    const {Event:event,Data:data}=message;
-    if(!['UpdateState','MatchCreated','MatchInitialized','MatchEnded','MatchDestroyed','ReplayCreated','CountdownBegin'].includes(event)||!validGuid(data.MatchGuid))return;
+    if(!message||typeof message!=='object')return;
+    // Current game builds send Data as a JSON-encoded string inside the envelope.
+    let data=message.Data;
+    if(typeof data==='string')try{data=JSON.parse(data);}catch{return;}
+    if(!data||typeof data!=='object')return;
+    const event=message.Event;
+    if(!['UpdateState','MatchCreated','MatchInitialized','MatchEnded','MatchDestroyed','ReplayCreated','CountdownBegin'].includes(event))return;
+    // The game sets MatchGuid only for online and LAN matches.
+    if(!validGuid(data.MatchGuid)){
+      if(event==='MatchDestroyed')this.unnamed=false;
+      else if(event==='UpdateState'&&data.Game?.bReplay===false&&!this.unnamed){this.unnamed=true;this.onNotice('Private or offline match: Rocket League sends no match ID here, so it is not recorded. Online matches are.');}
+      return;
+    }
+    this.unnamed=false;
     const id=data.MatchGuid.toUpperCase();
     if(event==='ReplayCreated'){this.replays.add(id);this.discard(id);return;}
     if(this.replays.has(id)||this.finished.has(id))return;
@@ -54,12 +65,11 @@ export class MatchCollector{
     if(event==='MatchEnded'){if(existing&&[0,1].includes(data.WinnerTeamNum)){existing.winner=data.WinnerTeamNum;this.schedule(existing);}return;}
     const game=data.Game;
     if(!game||!Array.isArray(data.Players)||!Array.isArray(game.Teams)||game.bReplay!==false&&!(game.bReplay===true&&existing?.live))return;
-    const playlist=game.PlaylistId;
-    if(!Number.isInteger(playlist)||playlist<1||playlist>1000)return;
+    const playlist=Number.isInteger(game.PlaylistId)&&game.PlaylistId>=1&&game.PlaylistId<=1000?game.PlaylistId:null;
     const score=[0,1].map(team=>game.Teams.find(t=>t.TeamNum===team)?.Score);
     if(!score.every(x=>number(x,1000)))return;
     const m=this.ensure(id),now=this.now()/1000,dt=Math.min(Math.max(now-(m.tick??now),0),.5),playing=game.bReplay===false&&game.bHasWinner!==true&&m.winner===null;
-    Object.assign(m,{live:true,score,playlist,tick:now});
+    Object.assign(m,{live:true,score,playlist:playlist??m.playlist,tick:now});
     if(m.winner!==null)m.finalSnapshot=true;
     for(const entry of data.Players){
       const target=this.identity(entry.PrimaryId);if(!target||![0,1].includes(entry.TeamNum))continue;
