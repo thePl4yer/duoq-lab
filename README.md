@@ -12,7 +12,7 @@ Rocket League dashboard for **Kate** and **P L 4 Y E R**: replay stats, boost st
 | Live tab | result, goals, own-team speed and boost of the match being played | keep the dashboard open while playing |
 | Replay files | everything | optional: drop `.replay` files on the page |
 
-Everything shared is stored in `matches.json` on the [`data` branch](https://github.com/thePl4yer/duoq-lab/tree/data); the site reads it from there. Shared rows contain only the two players and the **day**, never the time.
+Shared live/replay summaries are read directly from public relays by paired browsers. The optional daily job also archives approved records in `matches.json` on the [`data` branch](https://github.com/thePl4yer/duoq-lab/tree/data). Shared rows contain only the two players and the **day**, never the time.
 
 ## Daily job setup (once, about 5 minutes)
 
@@ -38,7 +38,7 @@ Good to know:
 
 ## Live tab and sharing
 
-Setup steps are on the dashboard under **Data & settings**. Sharing from a browser needs its key approved: copy the key shown there into `data/keys.json` as `{"<key>": "<name>"}`.
+Setup steps are on the dashboard under **Data & settings**. For direct sharing, exchange the public browser keys and use **Sharing → Trust browser** on both PCs. No Epic login or collector is needed. Adding keys to `data/keys.json` is optional for the collector archive and repository-wide approval.
 
 Connection problems: **Data & settings → Copy debug log**, or open Chrome's console (F12) and filter for `[duoq]`. It lists each connection step, every message the page ignored and why, and every caught error.
 
@@ -91,3 +91,7 @@ Use **Overall** to see all received games. Solo classification still requires co
 ### Live speed units
 
 Replay movement remains in uu/s. Live v3 normalizes a source explicitly configured as uu/s, km/h, mph or m/s. Automatic mode preserves ordinary uu/s feeds; small feeds are converted only when the independent supersonic flag provides a recognizable speed range. For example, 43 km/h equals about 1,194 uu/s. An average of 43 alone does not identify the source unit. Ambiguous samples stay unknown. Old v2 live records with implausibly small averages are excluded from movement metrics rather than silently multiplied. Importing a replay can replace their telemetry. Settings changes apply to the next live connection.
+
+### Browser asset updates
+
+Production builds put the complete JS module graph, worker, styles and parser/signing dependencies under content-versioned directories. Updating any source or dependency changes their URLs together, preventing a new HTML page from reusing old cached application modules. IndexedDB match data, browser signing keys and sharing preferences are not cleared. Reload an already-open tab after deployment to load the new document. `build.json` identifies the deployed asset version.
