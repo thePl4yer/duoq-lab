@@ -184,3 +184,9 @@ body.dragging::after{content:'Drop replays to import';position:fixed;inset:12px;
 @media(pointer:coarse){.icon{min-width:36px;min-height:36px}.seg button{min-height:34px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 .relay-sync{margin-top:20px;padding-top:12px;border-top:1px solid var(--line,#343b48)}.relay-sync input{width:100%;min-width:0;font-size:14px}.relay-sync code{overflow-wrap:anywhere;word-break:break-all}.relay-sync p{font-size:14px;line-height:1.6}.relay-sync label{font-size:14px}.relay-sync .buttons{flex-wrap:wrap;gap:8px}
+
+/* Small anime reactions beside the score, without changing table semantics. */
+.match-outcome{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;min-height:48px}
+.match-reaction{display:block;width:72px;height:48px;object-fit:contain;flex:none}
+.match-score{font-variant-numeric:tabular-nums}
+@media(max-width:600px){.match-outcome{gap:4px}.match-reaction{width:54px;height:36px}.match-outcome{min-height:36px}}

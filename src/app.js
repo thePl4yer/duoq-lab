@@ -77,6 +77,12 @@ function renderSpeed(a){
 }
 function renderStatus(){$('#status').textContent=[`${fmt(state.replays.length)} matches`,state.status].filter(Boolean).join(' · ');}
 function tableRows(){return filtered().filter(r=>{const p=pairInfo(r);if(state.scope==='together'&&!p.together)return false;if(state.scope==='against'&&(!p.both||p.together))return false;if(state.scope==='all'&&!p.pair.some(Boolean))return false;if(state.scope==='solo'&&(p.both||!p.pair.some(Boolean)))return false;if(state.tableMode!=='all'&&r.mode!==state.tableMode)return false;return !state.search||`${r.title} ${r.id} ${modeName(r.mode)} ${r.date} ${r.players.map(p=>p.name).join(' ')}`.toLowerCase().includes(state.search);});}
+// Reactions follow the same W/L result as the score; draws and head-to-head games stay neutral.
+function matchReaction(result){
+  if(result!=='W'&&result!=='L')return '';
+  const win=result==='W',label=win?'Happy Kate celebrates with a cookie':'Kate gives PLAYER a playful post-match kick';
+  return `<img class="match-reaction" src="./assets/match-${win?'win':'loss'}.svg" width="72" height="48" alt="${label}" title="${label}" loading="lazy" decoding="async">`;
+}
 function renderTable(){
   const rows=tableRows(),pages=Math.max(1,Math.ceil(rows.length/pageSize));state.page=Math.min(state.page,pages-1);
   $$('[data-scope]').forEach(b=>{b.classList.toggle('on',b.dataset.scope===state.scope);b.setAttribute('aria-selected',b.dataset.scope===state.scope);});
@@ -85,7 +91,7 @@ function renderTable(){
     const info=pairInfo(r),own=info.pair[0]??info.pair[1],score=own?[r.score[own.team],r.score[1-own.team]]:r.score;
     const result=info.both&&!info.together?'VS':[0,1].includes(r.winnerTeam)?r.winnerTeam===own.team?'W':'L':score[0]>score[1]?'W':score[0]<score[1]?'L':'D';
     const who=info.together?'Together':info.both?'Against':own?.id===KATE.id?'Kate':'PLAYER';
-    return `<tr><td><span class="result ${result==='W'?'win':result==='L'?'loss':''}">${result}</span> ${score.join(':')}${r.source==='live'&&!r.capture?.finalSnapshot?' *':''}</td><td>${esc(modeName(r.mode))}<small>${who}${r.boostWarning?' · limited boost data':''}</small></td><td>${esc(dateLabel(r))}</td><td>${minutes(r.duration)}</td><td>${({live:'Live tab',epic:r.rule===2?'Epic replay':'Epic history',local:'Replay'})[r.source]??'Ballchasing'}</td><td><button class="icon replay-detail" data-id="${esc(r.id)}" aria-label="Details ${esc(dateLabel(r))}">${icon('out')}</button></td></tr>`;
+    return `<tr><td><span class="match-outcome"><span class="result ${result==='W'?'win':result==='L'?'loss':''}">${result}</span>${matchReaction(result)}<span class="match-score">${score.join(':')}${r.source==='live'&&!r.capture?.finalSnapshot?' *':''}</span></span></td><td>${esc(modeName(r.mode))}<small>${who}${r.boostWarning?' · limited boost data':''}</small></td><td>${esc(dateLabel(r))}</td><td>${minutes(r.duration)}</td><td>${({live:'Live tab',epic:r.rule===2?'Epic replay':'Epic history',local:'Replay'})[r.source]??'Ballchasing'}</td><td><button class="icon replay-detail" data-id="${esc(r.id)}" aria-label="Details ${esc(dateLabel(r))}">${icon('out')}</button></td></tr>`;
   }).join('')||'<tr><td colspan="6" class="empty">No matches for these filters.</td></tr>';
   $('#table-summary').textContent=rows.length?`${state.page*pageSize+1}–${Math.min((state.page+1)*pageSize,rows.length)} of ${rows.length}`:'';
   $('#page-number').textContent=`${state.page+1}/${pages}`;$('#prev-page').disabled=state.page===0;$('#next-page').disabled=state.page+1>=pages;
