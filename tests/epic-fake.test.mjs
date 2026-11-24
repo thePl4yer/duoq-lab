@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
 const root=path.resolve(import.meta.dirname,'..'),KATE='76561198058377116',PLAYER='76561198060138310';
 const sample=path.join(os.tmpdir(),'duoq-not-us.replay');fs.writeFileSync(sample,Buffer.alloc(5000,7));
 const player={role:'player',account_id:'e0000000000000000000000000000001',ids:[`Steam|${PLAYER}|0`]},scout={role:'scout',account_id:'e0000000000000000000000000000002'};
@@ -19,7 +20,7 @@ const history=[
 function setup(extra={}){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'duoq-epic-')),world=path.join(dir,'world.json'),log=path.join(dir,'calls.jsonl');
   fs.writeFileSync(world,JSON.stringify({accounts:{player:{...player,history},scout},replays:{['a'.repeat(32)]:sample},...extra}));fs.writeFileSync(log,'');
-  const run=(env={})=>{const r=spawnSync(process.execPath,['--import',path.join(root,'tests/fake-epic.mjs'),path.join(root,'scripts/collect.mjs'),...(env.ARGS??[])],{cwd:root,encoding:'utf8',timeout:120000,env:{...process.env,LOGIN_KEY:'k'.repeat(32),DATA_DIR:path.join(dir,'store'),FAKE_EPIC:world,FAKE_EPIC_LOG:log,GITHUB_ACTIONS:'',FORCE:'',ALLOW_ONLINE:'',...env}});return {code:r.status,out:r.stdout+r.stderr};};
+  const run=(env={})=>{const r=spawnSync(process.execPath,['--import',pathToFileURL(path.join(root,'tests/fake-epic.mjs')).href,path.join(root,'scripts/collect.mjs'),...(env.ARGS??[])],{cwd:root,encoding:'utf8',timeout:120000,env:{...process.env,LOGIN_KEY:'k'.repeat(32),DATA_DIR:path.join(dir,'store'),FAKE_EPIC:world,FAKE_EPIC_LOG:log,GITHUB_ACTIONS:'',FORCE:'',ALLOW_ONLINE:'',...env}});return {code:r.status,out:r.stdout+r.stderr};};
   const calls=()=>fs.readFileSync(log,'utf8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l));
   const edit=f=>{const w=JSON.parse(fs.readFileSync(world,'utf8'));f(w);fs.writeFileSync(world,JSON.stringify(w));};
   const login=role=>{edit(w=>{w.deviceApproves=role;w.polls=0;});return run({ARGS:['login',role]});};

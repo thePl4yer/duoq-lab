@@ -77,3 +77,17 @@ npm run dev   # http://127.0.0.1:4173
 | `scripts/collect.mjs` | the scheduled job |
 
 Replay parser: [subtr-actor](https://github.com/rlrml/subtr-actor) 1.5.1 (MIT). Fan project; Rocket League® belongs to its owners.
+
+## Direct live sharing (no Epic login or GitHub collector required)
+
+Live and imported summaries are sent to public relays. The dashboard now reads signed summaries directly from those relays at startup, every 30 seconds while visible, when returning to the tab, and on **Sync now**. It retains received records in this browser for offline use. GitHub's data branch remains an optional historical archive; it is no longer the only cross-browser delivery path.
+
+On both PCs, open **Data & settings → Sharing**, copy your public **Key**, and paste the other player's public key into **Other player's public browser key → Trust browser**. Pair in both directions. These public keys are not API credentials or Epic logins. They authorize whose signed records a browser accepts; no private key is exchanged. Repository-approved keys in `data/keys.json` are also accepted. No unapproved author or invalid signature is accepted. Your private signing key remains in your own browser storage.
+
+Leave **Share results** enabled. **Only matches with both of us** limits publication, not local recording. Its initial default is now off so solo games can be shared; both sharing preferences persist across reloads. A restrictive saved choice remains restrictive. To send earlier local recordings explicitly, click **Share saved matches**. Backfills and failed submissions are queued and retried in batches while the dashboard is open. Receiving never re-publishes the other person's records.
+
+Use **Overall** to see all received games. Solo classification still requires complete roster coverage; starting live capture mid-match can leave a one-player match in Overall only. Free public relays have no retention or availability guarantee. Published summaries and public keys are public, not encrypted; keeping records in a browser cache does not make the original relay record private. Removing a trusted key prevents future intake, not removal of already received or published matches. Export backups for durable storage. A later replay enriches the same match rather than counting it twice.
+
+### Live speed units
+
+Replay movement remains in uu/s. Live v3 normalizes a source explicitly configured as uu/s, km/h, mph or m/s. Automatic mode preserves ordinary uu/s feeds; small feeds are converted only when the independent supersonic flag provides a recognizable speed range. For example, 43 km/h equals about 1,194 uu/s. An average of 43 alone does not identify the source unit. Ambiguous samples stay unknown. Old v2 live records with implausibly small averages are excluded from movement metrics rather than silently multiplied. Importing a replay can replace their telemetry. Settings changes apply to the next live connection.

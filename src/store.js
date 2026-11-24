@@ -1,6 +1,6 @@
 // Shared dataset. Read: matches.json on the repo's `data` branch. Write: signed events on free public relays,
 // which the daily job collects and commits. Relays only carry small daily records and are not the archive.
-import {validateSummary,publicRow} from './analysis.js';
+import {validateSummary,publicRow,PLAYERS,mergeReplays} from './analysis.js';
 export const RELAYS=['wss://relay.damus.io','wss://nos.lol','wss://nostr-pub.wellorder.net','wss://offchain.pub','wss://yabu.me','wss://nostr.21crypto.ch'];
 const KIND=30078,TOPIC='duoq-lab';
 export function dataUrl(file='matches.json',where=globalThis.location){
@@ -32,7 +32,7 @@ function relay(url,onOpen,onMessage,timeout){
     let socket,done=false;const end=value=>{if(done)return;done=true;clearTimeout(timer);try{socket.close();}catch{}resolve(value);},timer=setTimeout(()=>end(null),timeout);
     try{socket=new WebSocket(url);}catch{return end(null);}
     socket.onopen=()=>onOpen(socket);socket.onerror=socket.onclose=()=>end(null);
-    socket.onmessage=event=>{let m;try{m=JSON.parse(event.data);}catch{return;}if(Array.isArray(m))onMessage(m,end);};
+    socket.onmessage=event=>{if(typeof event.data!=='string'||event.data.length>2000000)return;let m;try{m=JSON.parse(event.data);}catch{return;}if(Array.isArray(m))try{onMessage(m,end);}catch{}};
   });
 }
 // Resolves to the number of relays that stored the event.
@@ -41,13 +41,25 @@ export async function publish(event,relays=RELAYS){
   return stored.filter(Boolean).length;
 }
 // Signed, validated rows from the approved keys only.
-export async function collect(keys,since,relays=RELAYS){
-  const n=await signing(),found=new Map();
-  if(keys.length)await Promise.all(relays.map(url=>relay(url,s=>s.send(JSON.stringify(['REQ','duoq',{kinds:[KIND],authors:keys,'#t':[TOPIC],since}])),(m,end)=>{
-    const e=m[2];if(m[0]==='EVENT'&&e?.id&&!found.has(e.id)&&e.kind===KIND&&keys.includes(e.pubkey)&&n.verifyEvent(e))found.set(e.id,e);
-    if(m[0]==='EOSE')end(true);
-  },15000)));
-  const rows=[];
-  for(const e of found.values())try{rows.push(publicRow(validateSummary(JSON.parse(e.content))));}catch{}
-  return rows;
+export function trustedKeys(keys){
+  if(!Array.isArray(keys)||keys.length>32||keys.some(k=>typeof k!=='string'||!/^[a-f0-9]{64}$/i.test(k)))throw Error('Use at most 32 public browser keys, each 64 hexadecimal characters.');
+  return [...new Set(keys.map(k=>k.toLowerCase()))];
 }
+export async function readRelays(keys,since=0,relays=RELAYS,{timeout=15000}={}){
+  keys=trustedKeys(keys);if(!keys.length)return {rows:[],reached:0};
+  const n=await signing(),found=new Map();
+  const done=await Promise.all(relays.map(url=>relay(url,s=>s.send(JSON.stringify(['REQ','duoq',{kinds:[KIND],authors:keys,'#t':[TOPIC],since,limit:2000}])),(m,end)=>{
+    const e=m[2];if(m[0]==='EVENT'&&m[1]==='duoq'&&e?.id&&found.size<10000&&!found.has(e.id)&&e.kind===KIND&&keys.includes(e.pubkey)&&typeof e.content==='string'&&e.content.length<1000000&&Array.isArray(e.tags)&&e.tags.some(t=>t[0]==='t'&&t[1]===TOPIC)&&n.verifyEvent(e))found.set(e.id,e);
+    if(m[0]==='EOSE'&&m[1]==='duoq')end(true);
+    if(m[0]==='CLOSED'&&m[1]==='duoq')end(false);
+  },timeout)));
+  const rows=[];
+  for(const e of found.values())try{
+    const row=publicRow(validateSummary(JSON.parse(e.content)));
+    if(!row.players.length||row.players.some(p=>!PLAYERS.some(base=>base.id===p.id))||!e.tags.some(t=>t[0]==='d'&&t[1]===TOPIC+':'+row.id))continue;
+    rows.push(row);
+  }catch{}
+  return {rows:mergeReplays([],rows),reached:done.filter(Boolean).length};
+}
+// Collector compatibility; browsers can use readRelays directly without this job.
+export async function collect(keys,since,relays=RELAYS){return (await readRelays(keys,since,relays)).rows;}

@@ -1,6 +1,7 @@
 import {PLAYERS,MODES,aggregate,pairInfo,fromBallchasing,mergeReplays,validateSummary,trackerRanks,tierName} from './analysis.js';
 import {trackerDefaultRanks,trackerResultSummary} from './tracker.js';
 import {fetchStore,identity,seal,publish} from './store.js';
+import {startRelaySync} from './relay-sync.js';
 import {MatchCollector,SOCKET_URL} from './live.js';
 import {$,$$,esc,fmt,berlin,showContent,toast,row,line,note,countUp,chart,tooltips,debug,debugTrail} from './ui.js';
 addEventListener('error',e=>debug('uncaught',e.error??e.message));
@@ -12,7 +13,7 @@ const modeName=id=>MODES.find(m=>m.id===id)?.name??({doubles:'Doubles',duels:'Du
 const dateLabel=r=>{if(!r.date)return 'No date';const d=new Date(r.date.replace(' ','T'));return isNaN(d)?r.date.slice(0,10):day.format(d);};
 const span=(start,end)=>{const [a,b]=[start,end].map(d=>new Date(d+'T12:00:00Z')),m=new Intl.DateTimeFormat('en-GB',{month:'short',timeZone:'UTC'});return m.format(a)===m.format(b)?`${a.getUTCDate()}–${b.getUTCDate()} ${m.format(b)}`:`${a.getUTCDate()} ${m.format(a)} – ${b.getUTCDate()} ${m.format(b)}`;};
 const state={replays:[],ranks:{},season:'',coverage:{},tracker:null,results:null,history:null,view:'overall',scope:'all',mode:'all',tableMode:'all',period:'all',search:'',page:0,rankMode:'doubles',status:''};
-let current,stored=[],importing=false,aborted=false,activeWorker=null,db;
+let current,stored=[],relayCache=[],relaySync,sharingBusy=false,importing=false,aborted=false,activeWorker=null,db;
 const pageSize=10,rankChart=chart($('#rank-chart')),speedChart=chart($('#speed-chart')),icon=id=>`<svg class="ico"><use href="#i-${id}"/></svg>`;
 tooltips();
 async function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('duoq-lab',1);req.onupgradeneeded=()=>req.result.createObjectStore('workspace');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
@@ -33,6 +34,7 @@ function render(){
     +(k.stealGames||p.stealGames?note(`Steal analysis ${k.stealGames} / ${p.stealGames} matches`):note(`Stolen and tax: re-import replays to analyse them (0 of ${fmt(Math.max(k.games,p.games))})`,k.oldGames||p.oldGames?`Older rows only know pickups on the opponent's side: ${fmt(k.oldStolen)} / ${fmt(p.oldStolen)}.`:''));
   $('#score').innerHTML=[['Goals','goals'],['Assists','assists'],['Shots','shots'],['Saves','saves'],['Demos','demos']].map(([label,key])=>row(label,k.games?k[key]:null,p.games?p[key]:null,{tip:`Total ${label.toLowerCase()} in this view`})).join('')+row('Bumped the other',a.coverage?a.pairBumps[0]:null,a.coverage?a.pairBumps[1]:null,{action:'bumps',tip:`Estimated from car movement in ${a.coverage} replays; demos are separate. Click for the list. “That was a tactical bump.”`});
   $('#movement').innerHTML=row('Average speed',k.avgSpeed,p.avgSpeed,{unit:' uu/s',tip:'Weighted by tracked playtime. Top speed is 2,300 uu/s.'})+row('Supersonic',k.superPct,p.superPct,{unit:'%',digits:1,tip:'Share of tracked time at supersonic speed'})+row('In the air',k.airPct,p.airPct,{unit:'%',digits:1,tip:'Share of tracked time off the ground and off walls'});
+  if(filtered().some(r=>r.players.some(p=>p.speedUnconfirmed)))$('#movement').innerHTML+=note('Some live speeds have an unconfirmed unit and are excluded. Replays can replace these values; choose the source unit in Live capture for future games.');
   renderSpeed(a);
   const [hk,hp]=a.habits;
   $('#habits').innerHTML=hk.games||hp.games?row('Whiffs / game',hk.whiffs,hp.whiffs,{digits:1})+row('Beaten to the ball / game',hk.beaten,hp.beaten,{digits:1})+row('50/50s won',hk.fiftyPct,hp.fiftyPct,{unit:'%',bar:false})+row('Kickoffs taken / game',hk.kickoffs,hp.kickoffs,{digits:1})+row('Passes / game',hk.passes,hp.passes,{digits:1,tip:'Passes to the other player'})+row('First man',hk.firstManPct,hp.firstManPct,{unit:'%',bar:false,tip:'Share of time as the player closest to the ball'})+(hk.dropshotGames||hp.dropshotGames?row('Dropshot damage / game',hk.dropshot,hp.dropshot,{tip:'Floor damage read from the replay network data'}):''):note(`Re-import replays to analyse them (0 of ${fmt(Math.max(k.games,p.games))})`);
@@ -108,11 +110,15 @@ ${t?PLAYERS.map(base=>`<h3 class="${base===KATE?'k':'p'}">${esc(base.name)} · r
 }
 const outbox={ids:()=>{try{return JSON.parse(localStorage.getItem('duoq.outbox')??'[]');}catch(e){debug('outbox',e);return [];}},set:ids=>localStorage.setItem('duoq.outbox',JSON.stringify([...new Set(ids)].slice(-500)))};
 async function share(rows){
-  if(!$('#share-publicly').checked)return;
+  if(!$('#share-publicly').checked){toast('Enable Share results before sending saved matches.');return;}
   const list=rows.filter(r=>!$('#duo-only').checked||pairInfo(r).both);if(!list.length)return;
-  try{const me=await identity();let sent=0;for(const row of list){if(await publish(await seal(row,me.secret)))sent++;outbox.set([...outbox.ids(),row.id]);}
-    state.status=sent?`${sent} sent, shown after the next daily run`:'no relay reachable, retry on next visit';
+  outbox.set([...outbox.ids(),...list.map(r=>r.id)]);
+  if(sharingBusy){state.status='Sharing in progress; additional matches queued.';renderStatus();return;}
+  sharingBusy=true;
+  try{const me=await identity();let sent=0;for(let i=0;i<list.length;i+=4)await Promise.all(list.slice(i,i+4).map(async row=>{if(await publish(await seal(row,me.secret))){sent++;outbox.set(outbox.ids().filter(id=>id!==row.id));}}));
+    state.status=sent?`${sent}/${list.length} shared directly. Trusted browsers sync within about 30 seconds; no collector needed.`:'No relay reachable; pending matches retry on your next visit.';
   }catch(error){debug('share',error);state.status=`saved here, sharing failed: ${error.message}`;}
+  finally{sharingBusy=false;}
   renderStatus();
 }
 async function addRows(rows){
@@ -157,13 +163,13 @@ function fillRankForm(){
   $('#rank-fields').innerHTML=MODES.map(m=>`<div class="rank-input"><span>${m.name}</span>${PLAYERS.map((p,i)=>{const r=state.ranks[p.id]?.[m.id];return `<input class="${i?'p':'k'}" type="number" min="0" max="5000" step="1" name="${p.id}-${m.id}-mmr" placeholder="MMR" aria-label="${esc(p.name)} ${m.name} MMR" value="${r?.mmr??''}"><input name="${p.id}-${m.id}-tier" aria-label="${esc(p.name)} ${m.name} rank" placeholder="Rank" maxlength="60" value="${esc(r?.tier??'')}">`;}).join('')}</div>`).join('');
 }
 // The signing library is only needed for the key and for sharing, so it is not loaded at startup.
-function showKey(){showKey=()=>{};identity().then(async me=>{$('#share-key').textContent=me.key;const keys=await fetch('./data/keys.json').then(r=>r.json()).catch(e=>{debug('keys',e);return {};});$('#key-status').textContent=keys[me.key]?'approved':'not approved yet';}).catch(e=>{debug('key',e);$('#key-status').textContent='unavailable: '+e.message;});}
+function showKey(){identity().then(me=>{$('#share-key').textContent=me.key;$('#key-status').textContent='public key for direct pairing';}).catch(e=>{debug('key',e);$('#key-status').textContent='unavailable: '+e.message;});}
 let liveSocket=null;
 function live(on,quiet=false){
   const button=$('#live-button'),say=(text,mode)=>{button.dataset.tip=text;button.dataset.state=mode;button.querySelector('span').textContent=mode==='off'?'Connect game':mode==='wait'?'Waiting':'Live';};
   localStorage.setItem('duoq.live',on?'1':'0');
   if(!on){liveSocket?.close();liveSocket=null;say('Records each online match when it ends, while this tab is open. Older matches come from the nightly job. Setup: Data & settings.','off');return;}
-  const collector=new MatchCollector({
+  const collector=new MatchCollector({speedUnit: $('#live-speed-unit').value,
     onNotice:m=>{debug('live',m);say(m,'on');},
     onDebug:(reason,detail)=>detail===undefined?debug('live','ignored:',reason):debug('live','ignored:',reason,detail),
     onSummary:row=>{debug('live','match captured',{score:row.score,players:row.players.length,speed:row.players.some(p=>p.tracked)});say(`Captured a match (${row.score.join(' : ')}). Click to stop.`,'on');toast(`Match captured: ${row.score.join(' : ')}`);addRows([row]).catch(e=>debug('save',e));}});
@@ -189,6 +195,8 @@ function live(on,quiet=false){
 $('#upload-button').onclick=$('#import-json-button').onclick=()=>$('#replay-files').click();
 $('#replay-files').onchange=e=>importFiles(e.target.files);
 $('#live-button').onclick=()=>live(localStorage.getItem('duoq.live')!=='1');
+try{const saved=localStorage.getItem('duoq.speed-unit');if(['auto','uu','kmh','mph','mps'].includes(saved))$('#live-speed-unit').value=saved;}catch{}
+$('#live-speed-unit').onchange=e=>{localStorage.setItem('duoq.speed-unit',e.target.value);toast('Speed unit saved. Takes effect next time you connect to the game.');};
 $('#cancel-import').onclick=()=>{aborted=true;parseFile.cancel?.();};
 document.addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files')){e.preventDefault();document.body.classList.add('dragging');}});
 document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging');});
@@ -209,7 +217,8 @@ document.addEventListener('keydown',e=>{const el=e.target.closest?.('[data-actio
 $('#cookie').onclick=()=>toast('Kate took the boost. You get a cookie. Fair trade? 🍪');
 $('#settings').addEventListener('toggle',e=>{if(e.target.open){fillRankForm();showKey();}});
 $('#copy-debug').onclick=()=>{const text=`duoq-lab debug log, ${new Date().toISOString()}\n${navigator.userAgent}\n${debugTrail()||'(empty)'}`;navigator.clipboard.writeText(text).then(()=>toast('Debug log copied. Paste it into the chat.'),e=>{debug('clipboard',e);showContent('Debug log',`<pre class="log">${esc(text)}</pre>`);});};
-$('#copy-key').onclick=()=>navigator.clipboard.writeText($('#share-key').textContent).then(()=>toast('Key copied. Send it to the repository owner.'));
+$('#copy-key').onclick=()=>navigator.clipboard.writeText($('#share-key').textContent).then(()=>toast('Public key copied. The other player can trust it in Sharing.'));
+for(const id of ['share-publicly','duo-only']){const el=$('#'+id);try{const saved=localStorage.getItem('duoq.pref.'+id);if(saved!==null)el.checked=saved==='1';}catch{}el.onchange=()=>{localStorage.setItem('duoq.pref.'+id,el.checked?'1':'0');toast('Sharing choice saved. Use Share saved matches to send earlier recordings.');};}
 $('#backup-button').onclick=downloadBackup;
 $$('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
@@ -225,12 +234,14 @@ async function boot(){
     Object.assign(state,{replays:seed.map(validateSummary),coverage,tracker,results,history});
     if(tracker){state.ranks=trackerDefaultRanks(tracker);state.season=tracker.season;}
     try{db=await openDB();stored=(await dbRead('replays')??[]).map(validateSummary);const saved=await dbRead('ranks');if(saved?.ranks&&Object.keys(saved.ranks).length){const imported=cleanRanks(saved.ranks);for(const base of PLAYERS)state.ranks[base.id]={...state.ranks[base.id],...imported[base.id]};state.season=saved.season||state.season;}state.replays=mergeReplays(state.replays,stored);}catch(e){debug('storage',e);toast(`Browser storage is unavailable: ${e.message}`,true);}
+    try{relayCache=(await dbRead('relay-replays')??[]).map(validateSummary);state.replays=mergeReplays(state.replays,relayCache);}catch(e){debug('relay cache',e);}
     state.status='loading shared dataset';render();
+    const retry=()=>{if(!sharingBusy&&$('#share-publicly').checked)return share(stored.filter(r=>outbox.ids().includes(r.id)).slice(0,20));};
+    relaySync=startRelaySync({onStatus:message=>{state.status=message;renderStatus();},onRows:async rows=>{relayCache=mergeReplays(relayCache,rows);state.replays=mergeReplays(state.replays,rows);try{await dbWrite('relay-replays',relayCache);}catch(e){debug('relay cache',e);}render();},onRetry:retry,onResend:()=>{if(!$('#share-publicly').checked){toast('Enable Share results first.');return;}const list=stored.filter(r=>!$('#duo-only').checked||pairInfo(r).both);outbox.set([...outbox.ids(),...list.map(r=>r.id)]);toast(`${list.length} saved matches queued. Larger backfills continue in batches while this page stays open.`);return retry();}});
+    retry();
     fetchStore().then(rows=>{state.replays=mergeReplays(state.replays,rows);
       for(const r of [...state.replays].reverse())for(const q of r.players)if(q.rank&&MODES.some(m=>m.id===r.mode))(state.ranks[q.id]??={})[r.mode]={mmr:q.rank.mmr,tier:tierName(q.rank.tier),division:`Div ${q.rank.division+1}`,season:'match history',source:'history',updatedAt:r.date};
       state.status='shared dataset loaded';render();
-      const have=new Set(rows.map(r=>r.id.toUpperCase())),waiting=outbox.ids().filter(id=>!have.has(id.toUpperCase()));outbox.set(waiting);
-      share(stored.filter(r=>waiting.includes(r.id)).slice(0,20));
     }).catch(e=>{debug('store',e);state.status='shared dataset unreachable, bundled data shown';renderStatus();});
     if(localStorage.getItem('duoq.live')==='1')live(true,true);
   }catch(e){debug('boot',e);toast(e.message,true);$('#status').textContent='The data could not be loaded.';}

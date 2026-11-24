@@ -9,6 +9,16 @@ const validGuid=id=>typeof id==='string'&&/^([a-f\d]{32}|[a-f\d]{64}|[a-f\d]{8}(
 const number=(value,max=1e6)=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=max;
 const counter=value=>number(value)&&Number.isInteger(value)?value:null;
 const mode=playlist=>({1:'duels',10:'duels',2:'doubles',11:'doubles',3:'standard',13:'standard',17:'hoops',27:'hoops',18:'rumble',28:'rumble',23:'dropshot',29:'dropshot',15:'snowday',30:'snowday'}[playlist]??'other');
+export const SPEED_FACTORS={uu:1,kmh:1/.036,mph:1/.022369362920544,mps:100};
+export function liveSpeedUnit(peak,supersonicPeak,setting='auto'){
+  if(setting!=='auto')return Object.hasOwn(SPEED_FACTORS,setting)?setting:null;
+  if(peak>150||peak===0)return 'uu';
+  // Supersonic speed is near 2,200–2,300 uu/s. Use that independent flag, never the average alone.
+  if(supersonicPeak>=75&&supersonicPeak<=84)return 'kmh';
+  if(supersonicPeak>=48&&supersonicPeak<=52)return 'mph';
+  if(supersonicPeak>=21.5&&supersonicPeak<=23.5)return 'mps';
+  return null;
+}
 
 // Every outgoing record passes through this projection: no raw packet, other player, loadout or stray property survives.
 export function projectSummary(input){
@@ -17,14 +27,14 @@ export function projectSummary(input){
   if(!Array.isArray(input.players)||input.players.length<1||input.players.length>2)throw Error('Invalid live target players.');
   const players=input.players.map(p=>{
     if(!Object.hasOwn(TARGETS,p.id)||![0,1].includes(p.team))throw Error('Unexpected live player identity.');
-    return {id:p.id,name:TARGETS[p.id],team:p.team,...Object.fromEntries(UNKNOWN.map(k=>[k,null])),...Object.fromEntries(TELEMETRY.map(k=>[k,number(p[k])?p[k]:null])),...Object.fromEntries(Object.keys(SCORE).map(k=>[k,counter(p[k])]))};
+    return {id:p.id,name:TARGETS[p.id],team:p.team,...Object.fromEntries(UNKNOWN.map(k=>[k,null])),...Object.fromEntries(TELEMETRY.map(k=>[k,number(p[k])?p[k]:null])),...Object.fromEntries(Object.keys(SCORE).map(k=>[k,counter(p[k])])),...(Object.hasOwn(SPEED_FACTORS,p.speedSourceUnit)?{speedSourceUnit:p.speedSourceUnit}:{}),...(p.speedUnconfirmed?{speedUnconfirmed:true}:{})};
   });
   if(new Set(players.map(p=>p.id)).size!==players.length)throw Error('Duplicate live player.');
   if(!/^\d{4}-\d\d-\d\d$/.test(input.date??''))throw Error('Invalid live capture day.');
   const playlist=input.playlist==null?null:Number(input.playlist);
   if(playlist!==null&&(!Number.isInteger(playlist)||playlist<1||playlist>1000))throw Error('Invalid live playlist.');
   const complete=input.capture?.rosterComplete===true;
-  return {schema:1,id:input.id.toUpperCase(),title:'Live match',date:input.date,dateTimezone:'day',mode:mode(playlist),playlist:playlist===null?null:String(playlist),duration:null,score:input.score.slice(),winnerTeam:input.winnerTeam,players,bumps:[],bumpAvailable:false,source:'live',sourceUrl:null,parser:'rocket-league-stats-api/2',capture:{rosterComplete:complete,startedMidMatch:!complete,finalSnapshot:input.capture?.finalSnapshot===true}};
+  return {schema:1,id:input.id.toUpperCase(),title:'Live match',date:input.date,dateTimezone:'day',mode:mode(playlist),playlist:playlist===null?null:String(playlist),duration:null,score:input.score.slice(),winnerTeam:input.winnerTeam,players,bumps:[],bumpAvailable:false,source:'live',sourceUrl:null,parser:'rocket-league-stats-api/3',capture:{rosterComplete:complete,startedMidMatch:!complete,finalSnapshot:input.capture?.finalSnapshot===true}};
 }
 export function validateAliases(aliases={}){
   if(!aliases||typeof aliases!=='object'||Array.isArray(aliases))throw Error('aliases must map public platform IDs to a target Steam ID.');
@@ -32,8 +42,9 @@ export function validateAliases(aliases={}){
   return new Map(Object.entries(aliases).map(([key,value])=>[key.toLowerCase(),value]));
 }
 export class MatchCollector{
-  constructor({onSummary,onNotice=()=>{},onDebug=()=>{},aliases={},settleMs=2500,now=()=>Date.now()}={}){
-    Object.assign(this,{onSummary,onNotice,onDebug,settleMs,now,aliases:validateAliases(aliases),matches:new Map(),finished:new Set(),replays:new Set(),unnamed:false,reasons:new Set()});
+  constructor({onSummary,onNotice=()=>{},onDebug=()=>{},aliases={},speedUnit='auto',settleMs=2500,now=()=>Date.now()}={}){
+    if(speedUnit!=='auto'&&!Object.hasOwn(SPEED_FACTORS,speedUnit))throw Error('Invalid speed unit');
+    Object.assign(this,{onSummary,onNotice,onDebug,speedUnit,settleMs,now,aliases:validateAliases(aliases),matches:new Map(),finished:new Set(),replays:new Set(),unnamed:false,reasons:new Set()});
   }
   // Reports each reason for ignoring messages once per connection, for debugging.
   drop(reason,detail){if(this.reasons.has(reason))return;this.reasons.add(reason);this.onDebug(reason,detail);}
@@ -83,7 +94,8 @@ export class MatchCollector{
       m.players.set(target,{id:target,team:entry.TeamNum,...stats});
       // Speed and boost are only sent for the viewer's own team; absent fields stay unknown.
       if(playing&&number(entry.Speed,1e5)){
-        const t=m.telemetry.get(target)??{tracked:0,speedIntegral:0,supersonic:0,air:0,boostCollected:0,boostUsed:0,boost:null};m.telemetry.set(target,t);
+        const t=m.telemetry.get(target)??{tracked:0,speedIntegral:0,supersonic:0,air:0,boostCollected:0,boostUsed:0,boost:null,peak:0,supersonicPeak:0};m.telemetry.set(target,t);
+        t.peak=Math.max(t.peak,entry.Speed);if(entry.bSupersonic===true)t.supersonicPeak=Math.max(t.supersonicPeak,entry.Speed);
         t.tracked+=dt;t.speedIntegral+=entry.Speed*dt;if(entry.bSupersonic===true)t.supersonic+=dt;if(entry.bOnGround===false&&entry.bOnWall!==true)t.air+=dt;
         if(entry.bDemolished===true||!number(entry.Boost,100))t.boost=null;
         else{if(t.boost!==null){const change=entry.Boost-t.boost;if(change>=3)t.boostCollected+=change;else if(change<0)t.boostUsed-=change;}t.boost=entry.Boost;}
@@ -107,7 +119,7 @@ export class MatchCollector{
     const m=this.matches.get(id);if(!m)return;
     this.discard(id);this.finished.add(id);if(this.finished.size>10000)this.finished.delete(this.finished.values().next().value);
     if(!m.live||m.invalid||m.winner===null||!m.score||!m.players.size){this.onDebug('match skipped',{live:m.live,invalid:!!m.invalid,winner:m.winner,score:m.score,players:m.players.size});this.onNotice('Skipped a match without a confirmed result for a configured player.');return;}
-    const players=[...m.players.values()].map(p=>{const t=m.telemetry.get(p.id);return t&&t.tracked>20?{...p,...t}:p;});
+    const players=[...m.players.values()].map(p=>{const t=m.telemetry.get(p.id);if(!t||t.tracked<=20)return p;const unit=liveSpeedUnit(t.peak,t.supersonicPeak,this.speedUnit);this.onDebug('speed calibration',{rawAverage:t.speedIntegral/t.tracked,rawPeak:t.peak,supersonicPeak:t.supersonicPeak,sourceUnit:unit,outputUnit:'uu/s'});if(!unit)this.onNotice('Live speed unit could not be confirmed. Speed stays unknown; select the source unit in Data & settings or import a replay.');return {...p,...t,speedIntegral:unit?t.speedIntegral*SPEED_FACTORS[unit]:null,supersonic:unit?t.supersonic:null,air:unit?t.air:null,speedSourceUnit:unit,speedUnconfirmed:!unit};});
     this.onSummary(projectSummary({schema:1,source:'live',id,date:m.date,playlist:m.playlist,score:m.score,winnerTeam:m.winner,players,capture:{rosterComplete:m.initialized,finalSnapshot:m.finalSnapshot===true}}));
   }
   discard(id){const m=this.matches.get(id);if(m?.timer)clearTimeout(m.timer);this.matches.delete(id);}
