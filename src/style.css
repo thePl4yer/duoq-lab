@@ -190,3 +190,6 @@ body.dragging::after{content:'Drop replays to import';position:fixed;inset:12px;
 .match-reaction{display:block;width:72px;height:48px;object-fit:contain;flex:none}
 .match-score{font-variant-numeric:tabular-nums}
 @media(max-width:600px){.match-outcome{gap:4px}.match-reaction{width:54px;height:36px}.match-outcome{min-height:36px}}
+#cookie-break { position: relative; display: inline-flex; }
+#cookie-preview { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); width: min(24rem, calc(100vw - 16px)); aspect-ratio: 16/9; background: #111724; border-radius: .6rem; box-shadow: 0 4px 24px #0009; z-index: 10; }
+#cookie-preview[hidden] { display: none; }

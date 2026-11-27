@@ -220,7 +220,35 @@ $('#boost').onclick=e=>{if(e.target.closest('[data-action="tax"]'))showTax();};
 $('#score').onclick=e=>{if(!e.target.closest('[data-action="bumps"]'))return;const events=current.shared.filter(r=>r.bumpAvailable&&pairInfo(r).both).flatMap(r=>r.bumps.map(e=>({...e,date:dateLabel(r)})));showContent('Bumps',`<p>${events.length} estimated bumps between you in this view. Estimated from car movement; may miss or misassign bumps.</p>${bumpList(events)}`);};
 $('#about-button').onclick=showAbout;
 document.addEventListener('keydown',e=>{const el=e.target.closest?.('[data-action]');if(el&&(e.key==='Enter'||e.key===' ')){e.preventDefault();el.click();}});
-$('#cookie').onclick=()=>toast('Kate took the boost. You get a cookie. Fair trade? 🍪');
+const cookieButton = $('#cookie'), cookieBreak = $('#cookie-break'), cookiePreview = $('#cookie-preview');
+function showCookie() {
+  if (!cookiePreview.hidden) return;
+  if (!cookiePreview.src) cookiePreview.src = './assets/cookie-break.mp4';
+  cookiePreview.hidden = false;
+  const box = cookiePreview.getBoundingClientRect();
+  const shift = Math.min(0, window.innerWidth - 8 - box.right) + Math.max(0, 8 - box.left);
+  cookiePreview.style.marginLeft = shift + 'px';
+  cookieButton.setAttribute('aria-expanded', 'true');
+  cookiePreview.play().catch(() => {});
+}
+function hideCookie() {
+  cookiePreview.pause();
+  if (cookiePreview.readyState) cookiePreview.currentTime = 0;
+  cookiePreview.hidden = true;
+  cookiePreview.style.marginLeft = '';
+  cookieButton.setAttribute('aria-expanded', 'false');
+}
+cookieBreak.onpointerenter = e => { if (e.pointerType === 'mouse') showCookie(); };
+cookieBreak.onpointerleave = e => { if (e.pointerType === 'mouse') hideCookie(); };
+cookieButton.onfocus = () => { if (cookieButton.matches(':focus-visible')) showCookie(); };
+cookieButton.onblur = hideCookie;
+cookieButton.onclick = e => {
+  if (e.pointerType === 'touch' && !cookiePreview.hidden) hideCookie();
+  else showCookie();
+  toast('Kate took the boost. You get a cookie. Fair trade? 🍪');
+};
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCookie(); });
+document.addEventListener('pointerdown', e => { if (!cookiePreview.hidden && !cookieBreak.contains(e.target)) hideCookie(); });
 $('#settings').addEventListener('toggle',e=>{if(e.target.open){fillRankForm();showKey();}});
 $('#copy-debug').onclick=()=>{const text=`duoq-lab debug log, ${new Date().toISOString()}\n${navigator.userAgent}\n${debugTrail()||'(empty)'}`;navigator.clipboard.writeText(text).then(()=>toast('Debug log copied. Paste it into the chat.'),e=>{debug('clipboard',e);showContent('Debug log',`<pre class="log">${esc(text)}</pre>`);});};
 $('#copy-key').onclick=()=>navigator.clipboard.writeText($('#share-key').textContent).then(()=>toast('Public key copied. The other player can trust it in Sharing.'));
